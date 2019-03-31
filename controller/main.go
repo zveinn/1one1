@@ -48,7 +48,7 @@ type Controller struct {
 	Collectors           map[string]*Collector
 	UIs                  map[string]*UI
 	mutex                sync.Mutex
-	MaxLinesInBufferFile int
+	MinLinesInBufferFile int
 }
 
 func (c *Controller) CleanupOnExit() {
@@ -172,15 +172,22 @@ func (c *Controller) sendToAllUis(msg string) {
 
 func (c *Controller) EngageBufferFilePipeAndRotation() {
 	for {
-		time.Sleep(1 * time.Second)
+		//time.Sleep(1 * time.Second)
 		c.EngageBufferPipe()
 	}
 }
 func (c *Controller) EngageBufferPipe() {
 
 	var buffer bytes.Buffer
+	// TODO: grow properly, we are writing strings.. but the buffer grows in bytes
+	buffer.Grow(c.MinLinesInBufferFile * 500)
 	count := 0
 	for {
+		if len(c.Buffer) > 100 {
+			//buffer.Grow(buffer.Len() * 2)
+			debugLog("chan length", len(c.Buffer))
+		}
+
 		message := <-c.Buffer
 		go c.sendToAllUis(message)
 		_, err := buffer.WriteString(message)
@@ -192,23 +199,27 @@ func (c *Controller) EngageBufferPipe() {
 		}
 
 		count++
-		debugLog(count)
-		if count >= c.MaxLinesInBufferFile {
-			now := time.Now().Format(time.RFC3339Nano)
-			now = strings.Replace(now, "-", "/", -1)
-			now = strings.Replace(now, "T", "/", -1)
-			now = strings.Replace(now, ":", "/", 1)
-			//	debugLog(strings.Split(now, ":")[0])
-			err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0777)
-			now = strings.Replace(now, ":", "/", 1)
-			panicX(err)
-			file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
-			panicX(err)
-			buffer.WriteTo(file)
+		//debugLog(count)
+		if count > c.MinLinesInBufferFile && count >= len(c.Collectors)-1 {
+			go c.WriteBufferToFile(buffer)
 			buffer.Reset()
 			break
 		}
 	}
+}
+
+func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
+	now := time.Now().Format(time.RFC3339Nano)
+	now = strings.Replace(now, "-", "/", -1)
+	now = strings.Replace(now, "T", "/", -1)
+	now = strings.Replace(now, ":", "/", 1)
+	//	debugLog(strings.Split(now, ":")[0])
+	err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0700)
+	now = strings.Replace(now, ":", "/", 1)
+	panicX(err)
+	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
+	panicX(err)
+	buffer.WriteTo(file)
 }
 
 func main() {
@@ -221,7 +232,7 @@ func main() {
 		Collectors:           make(map[string]*Collector),
 		Buffer:               make(chan string, 10000),
 		BufferDirectoryPath:  "./buffers/",
-		MaxLinesInBufferFile: 2000,
+		MinLinesInBufferFile: 5000,
 	}
 
 	defer controller.CleanupOnExit()

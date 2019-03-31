@@ -251,7 +251,7 @@ func collectStats(collector *Collector) {
 		}
 	}()
 	for {
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Nanosecond)
 		vmStat, err := mem.VirtualMemory()
 		panicX(err)
 
