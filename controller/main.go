@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"log"
 	"math/rand"
 	"net"
@@ -99,7 +100,7 @@ func (c *Controller) RemoveUI(TAG string) {
 	c.mutex.Unlock()
 }
 
-func start(controller *Controller) {
+func (controller *Controller) start() {
 
 	debugLog("listening on:", controller.IP+":"+controller.PORT)
 	ln, err := net.Listen("tcp", controller.IP+":"+controller.PORT)
@@ -123,11 +124,27 @@ func connectUI(ui *UI, controller *Controller, tag string) {
 	}
 }
 
+func deliverNamespaces(conn net.Conn) {
+	_, err := conn.Write([]byte("ns:general.entropy,memory.total\n"))
+	panicX(err)
+}
+
 func connectCollector(collector *Collector, controller *Controller, message string) {
-	debugLog("COLLECTOR:", string(message))
-	collector.TAG = message
+	debugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
+	collector.TAG = strings.TrimSuffix(message, "\n")
+	// accept connection
 	_, err := collector.Conn.Write([]byte("k\n"))
 	panicX(err)
+	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
+	if msg == "k\n" {
+		debugLog("K from collector, sending namespaces")
+		deliverNamespaces(collector.Conn)
+	} else {
+		debugLog(msg)
+		panicX(errors.New("NOT OK FROM COLLECTOR"))
+	}
+	// send namespaces
+
 	controller.AddCollector(collector.TAG, collector)
 	defer func() {
 		debugLog("Closing read pipe from", collector.TAG)
@@ -135,6 +152,9 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	}()
 
 	log.Println("Starting general collection from:", collector.TAG)
+	readFromConnectionOriginal(collector, controller)
+}
+func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 	for {
 		message, err := bufio.NewReader(collector.Conn).ReadString('\n')
 		if err != nil {
@@ -147,11 +167,13 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 				break
 			}
 		}
+		go controller.parseIncomingData(collector.TAG + ":::" + message)
 		//TODO: IMPLEMENT SQLITE
 		//debugLog("IN:", string(message))
-		controller.Buffer <- message
+
 	}
 }
+
 func receiveConnection(conn net.Conn, controller *Controller) {
 	debugLog("Collector connected:", conn.RemoteAddr())
 	message, _ := bufio.NewReader(conn).ReadString('\n')
@@ -169,12 +191,17 @@ func (c *Controller) sendToAllUis(msg string) {
 		ui.SendChannel <- msg
 	}
 }
-
-func (c *Controller) EngageBufferFilePipeAndRotation() {
-	for {
-		//time.Sleep(1 * time.Second)
-		c.EngageBufferPipe()
+func (c *Controller) parseIncomingData(msg string) {
+	msg = strings.TrimSuffix(msg, "\n")
+	data := strings.Split(msg, ":::")
+	if strings.Contains(data[1], "h") {
+		debugLog("NEW HOST DATA:", data[2])
 	}
+	if strings.Contains(data[1], "d") {
+		debugLog("NEW HOST DATA:", data[2])
+	}
+	debugLog("NEWDATA:", msg)
+	c.Buffer <- msg
 }
 func (c *Controller) EngageBufferPipe() {
 
@@ -189,6 +216,8 @@ func (c *Controller) EngageBufferPipe() {
 		}
 
 		message := <-c.Buffer
+		//debugLog("CONTROLLER BUFFER RECEIVED:", message)
+
 		go c.sendToAllUis(message)
 		_, err := buffer.WriteString(message)
 
@@ -203,12 +232,13 @@ func (c *Controller) EngageBufferPipe() {
 		if count > c.MinLinesInBufferFile && count >= len(c.Collectors)-1 {
 			go c.WriteBufferToFile(buffer)
 			buffer.Reset()
-			break
+			count = 0
 		}
 	}
 }
 
 func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
+
 	now := time.Now().Format(time.RFC3339Nano)
 	now = strings.Replace(now, "-", "/", -1)
 	now = strings.Replace(now, "T", "/", -1)
@@ -217,6 +247,7 @@ func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
 	err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0700)
 	now = strings.Replace(now, ":", "/", 1)
 	panicX(err)
+	debugLog("writing to file:", c.BufferDirectoryPath+now)
 	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	panicX(err)
 	buffer.WriteTo(file)
@@ -232,12 +263,12 @@ func main() {
 		Collectors:           make(map[string]*Collector),
 		Buffer:               make(chan string, 10000),
 		BufferDirectoryPath:  "./buffers/",
-		MinLinesInBufferFile: 5000,
+		MinLinesInBufferFile: 10,
 	}
 
 	defer controller.CleanupOnExit()
-	go controller.EngageBufferFilePipeAndRotation()
-	start(&controller)
+	go controller.EngageBufferPipe()
+	controller.start()
 
 	// capture stop signal in order to exit gracefully.
 	stop := make(chan os.Signal, 1)
