@@ -14,19 +14,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/zkynetio/lynx/helpers"
 )
-
-func debugLog(v ...interface{}) {
-	if os.Getenv("DEBUG") == "true" {
-		log.Println(v...)
-	}
-}
-
-func panicX(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
 
 type UI struct {
 	Conn        net.Conn
@@ -53,11 +42,11 @@ type Controller struct {
 }
 
 func (c *Controller) CleanupOnExit() {
-	debugLog("Cleaning up on exit...")
+	helpers.DebugLog("Cleaning up on exit...")
 	for _, collector := range c.Collectors {
 		if collector.Conn != nil {
 			_, _ = collector.Conn.Write([]byte("c\n"))
-			debugLog("Closing:", collector.TAG)
+			helpers.DebugLog("Closing:", collector.TAG)
 			_ = collector.Conn.Close()
 		}
 	}
@@ -73,7 +62,7 @@ type Collector struct {
 func loadEnvironmentVariables() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		debugLog(err)
+		helpers.DebugLog(err)
 		log.Fatal("Error loading .env file")
 	}
 }
@@ -102,52 +91,52 @@ func (c *Controller) RemoveUI(TAG string) {
 
 func (controller *Controller) start() {
 
-	debugLog("listening on:", controller.IP+":"+controller.PORT)
+	helpers.DebugLog("listening on:", controller.IP+":"+controller.PORT)
 	ln, err := net.Listen("tcp", controller.IP+":"+controller.PORT)
-	panicX(err)
+	helpers.PanicX(err)
 	for {
 		conn, err := ln.Accept()
-		panicX(err)
+		helpers.PanicX(err)
 		go receiveConnection(conn, controller)
 	}
 }
 
 func connectUI(ui *UI, controller *Controller, tag string) {
-	debugLog("UI:")
+	helpers.DebugLog("UI:")
 	controller.AddUI(tag+"TODORANDOMINT?", ui)
 	for {
 		outgoing := <-ui.SendChannel
 		log.Println(outgoing)
 		_, err := ui.Conn.Write([]byte(outgoing))
 		//TODO: handle better
-		panicX(err)
+		helpers.PanicX(err)
 	}
 }
 
 func deliverNamespaces(conn net.Conn) {
 	_, err := conn.Write([]byte("ns:general.entropy,memory.total\n"))
-	panicX(err)
+	helpers.PanicX(err)
 }
 
 func connectCollector(collector *Collector, controller *Controller, message string) {
-	debugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
+	helpers.DebugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
 	collector.TAG = strings.TrimSuffix(message, "\n")
 	// accept connection
 	_, err := collector.Conn.Write([]byte("k\n"))
-	panicX(err)
+	helpers.PanicX(err)
 	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
 	if msg == "k\n" {
-		debugLog("K from collector, sending namespaces")
+		helpers.DebugLog("K from collector, sending namespaces")
 		deliverNamespaces(collector.Conn)
 	} else {
-		debugLog(msg)
-		panicX(errors.New("NOT OK FROM COLLECTOR"))
+		helpers.DebugLog(msg)
+		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
 	}
 	// send namespaces
 
 	controller.AddCollector(collector.TAG, collector)
 	defer func() {
-		debugLog("Closing read pipe from", collector.TAG)
+		helpers.DebugLog("Closing read pipe from", collector.TAG)
 		controller.RemoveCollector(collector.TAG)
 	}()
 
@@ -159,23 +148,23 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		message, err := bufio.NewReader(collector.Conn).ReadString('\n')
 		if err != nil {
 			// TODO: handle better
-			debugLog("ERROR IN READ LOOP:", err)
+			helpers.DebugLog("ERROR IN READ LOOP:", err)
 			err = collector.Conn.Close()
 			if err != nil {
 				// TODO: handle better
-				debugLog("ERROR CLOSING INSIDE READ LOOP:", err)
+				helpers.DebugLog("ERROR CLOSING INSIDE READ LOOP:", err)
 				break
 			}
 		}
 		go controller.parseIncomingData(collector.TAG + ":::" + message)
 		//TODO: IMPLEMENT SQLITE
-		//debugLog("IN:", string(message))
+		//helpers.DebugLog("IN:", string(message))
 
 	}
 }
 
 func receiveConnection(conn net.Conn, controller *Controller) {
-	debugLog("Collector connected:", conn.RemoteAddr())
+	helpers.DebugLog("Collector connected:", conn.RemoteAddr())
 	message, _ := bufio.NewReader(conn).ReadString('\n')
 	if message == "ui\n" {
 		connectUI(&UI{Conn: conn}, controller, message)
@@ -195,12 +184,12 @@ func (c *Controller) parseIncomingData(msg string) {
 	msg = strings.TrimSuffix(msg, "\n")
 	data := strings.Split(msg, ":::")
 	if strings.Contains(data[1], "h") {
-		debugLog("NEW HOST DATA:", data[2])
+		helpers.DebugLog("NEW HOST DATA:", data[2])
 	}
 	if strings.Contains(data[1], "d") {
-		debugLog("NEW HOST DATA:", data[2])
+		helpers.DebugLog("NEW HOST DATA:", data[2])
 	}
-	debugLog("NEWDATA:", msg)
+	helpers.DebugLog("NEWDATA:", msg)
 	c.Buffer <- msg
 }
 func (c *Controller) EngageBufferPipe() {
@@ -212,23 +201,23 @@ func (c *Controller) EngageBufferPipe() {
 	for {
 		if len(c.Buffer) > 100 {
 			//buffer.Grow(buffer.Len() * 2)
-			debugLog("chan length", len(c.Buffer))
+			helpers.DebugLog("chan length", len(c.Buffer))
 		}
 
 		message := <-c.Buffer
-		//debugLog("CONTROLLER BUFFER RECEIVED:", message)
+		//helpers.DebugLog("CONTROLLER BUFFER RECEIVED:", message)
 
 		go c.sendToAllUis(message)
 		_, err := buffer.WriteString(message)
 
-		//debugLog("wrote", data)
+		//helpers.DebugLog("wrote", data)
 		if err != nil {
-			debugLog(err)
+			helpers.DebugLog(err)
 			break
 		}
 
 		count++
-		//debugLog(count)
+		//helpers.DebugLog(count)
 		if count > c.MinLinesInBufferFile && count >= len(c.Collectors)-1 {
 			go c.WriteBufferToFile(buffer)
 			buffer.Reset()
@@ -243,13 +232,13 @@ func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
 	now = strings.Replace(now, "-", "/", -1)
 	now = strings.Replace(now, "T", "/", -1)
 	now = strings.Replace(now, ":", "/", 1)
-	//	debugLog(strings.Split(now, ":")[0])
+	//	helpers.DebugLog(strings.Split(now, ":")[0])
 	err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0700)
 	now = strings.Replace(now, ":", "/", 1)
-	panicX(err)
-	debugLog("writing to file:", c.BufferDirectoryPath+now)
+	helpers.PanicX(err)
+	helpers.DebugLog("writing to file:", c.BufferDirectoryPath+now)
 	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
-	panicX(err)
+	helpers.PanicX(err)
 	buffer.WriteTo(file)
 }
 
