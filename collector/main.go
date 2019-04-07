@@ -295,7 +295,7 @@ func (collector *Collector) collectStats() {
 		//getLoad()
 		//getActiveSessions()
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10000 * time.Millisecond)
 		// TODO: make randomizer !
 		for _, controller := range collector.Controllers {
 			if controller.Active && controller.NSDelivered {
