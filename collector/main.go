@@ -5,6 +5,7 @@ import (
 	"os/signal"
 
 	"github.com/zkynetio/lynx/collector/processor"
+	"github.com/zkynetio/lynx/collector/stats"
 	"github.com/zkynetio/lynx/helpers"
 )
 
@@ -26,8 +27,10 @@ func main() {
 		collector,
 	)
 
-	go collector.EngageControllerListeners()
-	go collector.MaintainControllerConnections()
+	stats.InitStats()
+
+	go collector.EngageControllerCommunications()
+	go collector.MaintainControllerCommunications()
 	go collector.CollectStats()
 
 	if os.Getenv("DEBUG") == "true" {

@@ -11,37 +11,42 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
-	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
+	"github.com/zkynetio/lynx/helpers"
 )
 
-func panicX(err error) {
-	if err != nil {
-		panic(err)
-	}
+var History *HistoryBuffer
+
+const HighestHistoryIndex = 5
+
+type DataPoint struct {
+	Memory
+	Load
+	Disk
+	CPU string
+	//Host      string
+	General   string
+	Load1MIN  float64
+	Load5MIN  float64
+	Load15MIN float64
 }
-func STATSMemory() string {
-	vmStat, err := mem.VirtualMemory()
-	panicX(err)
-	log.Println("=========== MEMORY =================")
-	log.Println("Total:", vmStat.Total)
-	log.Println("Used:", vmStat.Used)
-	log.Println("Free:", vmStat.Free)
-	log.Println("Shared:", vmStat.Shared)
-	log.Println("Buff/cached:", vmStat.Cached+vmStat.Buffers)
-	log.Println("Available:", vmStat.Available)
-	log.Println("swap")
-	log.Println("Swap Free:", vmStat.SwapFree)
-	log.Println("Swap Cached:", vmStat.SwapCached)
-	log.Println("Swap Total:", vmStat.SwapTotal)
-	log.Println("=========== MEMORY =================")
-	return vmStat.String()
+
+type HistoryBuffer struct {
+	//disk              map[int]disk.UsageStat
+	//memory            map[int]mem.VirtualMemoryStat
+	//cpu               map[int]cpu.InfoStat
+	//cpuPercentage     map[int][]float64
+	//networkIF         map[int]net.Interface
+	//UploadAndDownload map[int][]float64
+	//Entropy           map[int]float64
+	//Load              map[int]float64
+	//LastCollection time.time
+	DataPointMap map[int]*DataPoint
 }
 
 func fetchDISK() {
 	diskStat, err := disk.Usage("/")
-	panicX(err)
+	helpers.PanicX(err)
 	log.Println(disk.GetDiskSerialNumber("/dev/sda2"))
 	log.Println("=========== DISK / =================")
 	log.Println("Total: ", diskStat.Total)
@@ -59,12 +64,12 @@ func fetchDISK() {
 
 func fetchCPUPercentage() {
 	percentage, err := cpu.Percent(0, true)
-	panicX(err)
+	helpers.PanicX(err)
 	log.Println("CURRENT CPU PERCENTAGE:", percentage)
 }
 func fetchCPU() {
 	cpuStat, err := cpu.Info()
-	panicX(err)
+	helpers.PanicX(err)
 	for _, v := range cpuStat {
 		log.Println("=========== CPu=================")
 		//log.Println("PERCENTAGE:", percentage[i])
@@ -89,7 +94,7 @@ func fetchCPU() {
 
 func GetHost() string {
 	hostStat, err := host.Info()
-	panicX(err)
+	helpers.PanicX(err)
 	host := "h:::" + hostStat.Hostname
 	host = host + "," + hostStat.HostID
 	host = host + "," + hostStat.KernelVersion
@@ -107,19 +112,19 @@ func GetHost() string {
 
 func fetchNetworkIFS() {
 	interfStat, err := net.Interfaces()
-	panicX(err)
+	helpers.PanicX(err)
 
 	for _, interf := range interfStat {
 
 		log.Println("Name:", interf.Name)
 		log.Println("HardwareAddr:", interf.HardwareAddr)
 		addrs, err := interf.Addrs()
-		panicX(err)
+		helpers.PanicX(err)
 		for _, addr := range addrs {
 			log.Println("ADDR:::", addr)
 		}
 		maddrs, err := interf.MulticastAddrs()
-		panicX(err)
+		helpers.PanicX(err)
 		for _, addr := range maddrs {
 			log.Println("MULTICAST ADDS:::", addr)
 		}
@@ -129,7 +134,7 @@ func fetchNetworkIFS() {
 		//for _, flag := range interf.Flags {
 		//	log.Println("FLAG:::", flag)
 		//}
-		getUploadDownload(interf.Name)
+		//getUploadDownload(interf.Name)
 
 	}
 }
@@ -213,16 +218,16 @@ func getActiveSessions() {
 
 func getProcesses() {
 	ps, err := process.Processes()
-	panicX(err)
+	helpers.PanicX(err)
 	//log.Println(ps)
 	for _, v := range ps {
 		usernme, err := v.Username()
-		panicX(err)
+		helpers.PanicX(err)
 
 		status, err := v.Status()
-		panicX(err)
+		helpers.PanicX(err)
 		connections, err := v.Connections()
-		panicX(err)
+		helpers.PanicX(err)
 		log.Println(usernme, v.Pid, status)
 		for _, v := range connections {
 			if v.Status != "NONE" {
@@ -232,8 +237,43 @@ func getProcesses() {
 	}
 }
 
-func getLoad() {
-	ld, err := load.Avg()
-	panicX(err)
-	log.Println(ld.String())
+// ANAL-ISIS
+
+func InitStats() {
+	History = &HistoryBuffer{
+		DataPointMap: make(map[int]*DataPoint),
+	}
+}
+func CollectData() string {
+	// move datapoints
+	// TODO: do better
+	if History.DataPointMap[HighestHistoryIndex] != nil {
+		History.DataPointMap[HighestHistoryIndex-1] = History.DataPointMap[HighestHistoryIndex]
+		//helpers.DebugLog("second index", History.DataPointMap[HighestHistoryIndex-1])
+	} else {
+		History.DataPointMap[HighestHistoryIndex-1] = &DataPoint{}
+
+	}
+
+	History.DataPointMap[HighestHistoryIndex] = &DataPoint{}
+	//helpers.DebugLog("current index", History.DataPointMap[HighestHistoryIndex])
+	//helpers.DebugLog("second index", History.DataPointMap[HighestHistoryIndex-1])
+
+	// start
+	collectLoad(History.DataPointMap[HighestHistoryIndex])
+	collectMemory(History.DataPointMap[HighestHistoryIndex])
+	collectDisk(History.DataPointMap[HighestHistoryIndex])
+
+	return PrepareDataForShipping()
+}
+
+func AnalyzeData() {
+	log.Println("ANALYZE data point")
+}
+func PrepareDataForShipping() (data string) {
+	data = History.DataPointMap[HighestHistoryIndex].Memory.GetFormattedString() + ":"
+	data = data + History.DataPointMap[HighestHistoryIndex].Load.GetFormattedString() + " :"
+	data = data + History.DataPointMap[HighestHistoryIndex].Disk.GetFormattedString()
+
+	return
 }

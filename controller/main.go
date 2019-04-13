@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,7 @@ type Controller struct {
 	MinLinesInBufferFile int
 }
 
+// mat zoe? abive and beyond
 func (c *Controller) CleanupOnExit() {
 	helpers.DebugLog("Cleaning up on exit...")
 	for _, collector := range c.Collectors {
@@ -121,24 +123,40 @@ func deliverNamespaces(conn net.Conn) {
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	helpers.DebugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
 	collector.TAG = strings.TrimSuffix(message, "\n")
-	// accept connection
-	_, err := collector.Conn.Write([]byte("k\n"))
-	helpers.PanicX(err)
-	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
-	if msg == "k\n" {
-		helpers.DebugLog("K from collector, sending namespaces")
-		deliverNamespaces(collector.Conn)
-	} else {
-		helpers.DebugLog(msg)
-		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
-	}
-	// send namespaces
 
 	controller.AddCollector(collector.TAG, collector)
 	defer func() {
 		helpers.DebugLog("Closing read pipe from", collector.TAG)
 		controller.RemoveCollector(collector.TAG)
 	}()
+	// accept connection
+	//_, err := collector.Conn.Write([]byte("k\n"))
+	deliverNamespaces(collector.Conn)
+	//	helpers.PanicX(err)
+	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
+	if msg == "k\n" {
+		helpers.DebugLog("K from collector")
+	} else {
+		helpers.DebugLog(msg)
+		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
+	}
+	// send namespaces
+
+	// wait for host data
+	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
+	data := strings.Split(msg, ":::")
+	if !strings.Contains(data[0], "h") {
+		helpers.PanicX(errors.New("no host data found in handskae" + string(msg)))
+	}
+	helpers.DebugLog("HOST DATA:", data[1])
+
+	// waiting for final okey
+	helpers.DebugLog("waiting for final ok ...")
+	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
+	if msg != "k\n" {
+		helpers.DebugLog(msg)
+		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
+	}
 
 	log.Println("Starting general collection from:", collector.TAG)
 	readFromConnectionOriginal(collector, controller)
@@ -156,6 +174,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 				break
 			}
 		}
+		helpers.DebugLog("Length of message:", strconv.Itoa(len(message)))
 		go controller.parseIncomingData(collector.TAG + ":::" + message)
 		//TODO: IMPLEMENT SQLITE
 		//helpers.DebugLog("IN:", string(message))
@@ -164,7 +183,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 }
 
 func receiveConnection(conn net.Conn, controller *Controller) {
-	helpers.DebugLog("Collector connected:", conn.RemoteAddr())
+	helpers.DebugLog("Connection from:", conn.RemoteAddr())
 	message, _ := bufio.NewReader(conn).ReadString('\n')
 	if message == "ui\n" {
 		connectUI(&UI{Conn: conn}, controller, message)
@@ -182,21 +201,15 @@ func (c *Controller) sendToAllUis(msg string) {
 }
 func (c *Controller) parseIncomingData(msg string) {
 	msg = strings.TrimSuffix(msg, "\n")
-	data := strings.Split(msg, ":::")
-	if strings.Contains(data[1], "h") {
-		helpers.DebugLog("NEW HOST DATA:", data[2])
-	}
-	if strings.Contains(data[1], "d") {
-		helpers.DebugLog("NEW HOST DATA:", data[2])
-	}
-	helpers.DebugLog("NEWDATA:", msg)
+
+	helpers.DebugLog("DATA:", msg)
 	c.Buffer <- msg
 }
 func (c *Controller) EngageBufferPipe() {
 
 	var buffer bytes.Buffer
 	// TODO: grow properly, we are writing strings.. but the buffer grows in bytes
-	buffer.Grow(c.MinLinesInBufferFile * 500)
+	//	buffer.Grow(c.MinLinesInBufferFile * 500)
 	count := 0
 	for {
 		if len(c.Buffer) > 100 {
