@@ -113,7 +113,8 @@ func (collector *Collector) CollectStats() {
 		}
 	}()
 	for {
-		data := stats.CollectData()
+		data := stats.CollectDynamicData()
+		stats.FetchNetworkIFS()
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 		// TODO: make randomizer !h
 		for _, controller := range collector.Controllers {
@@ -123,26 +124,6 @@ func (collector *Collector) CollectStats() {
 		}
 	}
 
-}
-
-func (c *Controller) OpenSendChannel() {
-	defer func() {
-		log.Println("Closing send loop to controller", c.Address)
-	}()
-	c.Send = make(chan string, 10000)
-	for {
-		data, errx := <-c.Send
-		if !errx {
-			break
-		}
-		helpers.DebugLog("sending to controller:", data)
-		_, err := c.Conn.Write([]byte(data))
-		if err != nil {
-			helpers.DebugLog("ERROR WHEN WRITING STATS:", err)
-			close(c.Send)
-			break
-		}
-	}
 }
 
 type Controller struct {
@@ -182,6 +163,26 @@ func (c *Controller) Setconnection(conn net.Conn) {
 	c.mutex.Lock()
 	c.Conn = conn
 	c.mutex.Unlock()
+}
+
+func (c *Controller) OpenSendChannel() {
+	defer func() {
+		log.Println("Closing send loop to controller", c.Address)
+	}()
+	c.Send = make(chan string, 10000)
+	for {
+		data, errx := <-c.Send
+		if !errx {
+			break
+		}
+		helpers.DebugLog("sending to controller:", data)
+		_, err := c.Conn.Write([]byte(data))
+		if err != nil {
+			helpers.DebugLog("ERROR WHEN WRITING STATS:", err)
+			close(c.Send)
+			break
+		}
+	}
 }
 
 func (c *Controller) Listen() {

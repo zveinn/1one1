@@ -8,8 +8,11 @@ import (
 	"github.com/zkynetio/lynx/helpers"
 )
 
-type Memory struct {
-	Total      uint64
+type MemoryStatic struct {
+	Total     uint64
+	SwapTotal uint64
+}
+type MemoryDynamic struct {
 	Used       uint64
 	Free       uint64
 	Shared     uint64
@@ -18,85 +21,71 @@ type Memory struct {
 	Cached     uint64
 	Available  uint64
 	SwapCached uint64
-	SwapTotal  uint64
 	Percentage float64
 }
 
-func collectMemory(dp *DataPoint) {
+func collectMemory(dp *DynamicPoint) {
 	vmStat, err := mem.VirtualMemory()
 	helpers.PanicX(err)
 
-	memoryDataPoint := Memory{}
-	memoryDataPoint.Total = vmStat.Total
-	memoryDataPoint.Available = vmStat.Available
-	memoryDataPoint.Used = vmStat.Used
-	memoryDataPoint.Free = vmStat.Free
-	memoryDataPoint.Shared = vmStat.Shared
-	memoryDataPoint.Bufferes = vmStat.Buffers
-	memoryDataPoint.SwapFree = vmStat.SwapFree
-	memoryDataPoint.SwapCached = vmStat.SwapCached
-	memoryDataPoint.SwapTotal = vmStat.SwapTotal
-	memoryDataPoint.Percentage = float64(vmStat.Used) / float64(vmStat.Total)
+	memoryDynamicPoint := MemoryDynamic{}
+	//memoryDynamicPoint.Total = vmStat.Total
+	memoryDynamicPoint.Available = vmStat.Available
+	memoryDynamicPoint.Used = vmStat.Used
+	memoryDynamicPoint.Free = vmStat.Free
+	memoryDynamicPoint.Shared = vmStat.Shared
+	memoryDynamicPoint.Bufferes = vmStat.Buffers
+	memoryDynamicPoint.SwapFree = vmStat.SwapFree
+	memoryDynamicPoint.SwapCached = vmStat.SwapCached
+	//memoryDynamicPoint.SwapTotal = vmStat.SwapTotal
+	memoryDynamicPoint.Percentage = float64(vmStat.Used) / float64(vmStat.Total)
 
-	//log.Println(memoryDataPoint)
-	dp.Memory = memoryDataPoint
+	//log.Println(memoryDynamicPoint)
+	dp.MemoryDynamic = memoryDynamicPoint
 }
 
-func (m *Memory) GetFormattedString() string {
+func (m *MemoryDynamic) GetFormattedString() string {
 	//helpers.DebugLog("comparing ...")
 	//helpers.DebugLog(m)
-	//helpers.DebugLog(History.DataPointMap[HighestHistoryIndex-1].Memory)
+	//helpers.DebugLog(History.DynamicPointMap[HighestHistoryIndex-1].Memory)
 
 	var memorySlice []string
 
-	memorySlice = append(memorySlice, strconv.FormatFloat(History.DataPointMap[HighestHistoryIndex-1].Memory.Percentage, 'f', 6, 64))
+	memorySlice = append(memorySlice, strconv.FormatFloat(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Percentage, 'f', 6, 64))
 
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Total != m.Total {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Total-m.Total)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Available != m.Available {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Available-m.Available)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
-
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Available != m.Available {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Available-m.Available)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Used != m.Used {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Used-m.Used)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Used != m.Used {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Used-m.Used)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Free != m.Free {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Free-m.Free)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Free != m.Free {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Free-m.Free)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Shared != m.Shared {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Shared-m.Shared)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Shared != m.Shared {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Shared-m.Shared)))
-	} else {
-		memorySlice = append(memorySlice, "")
-	}
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.Bufferes != m.Bufferes {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.Bufferes-m.Bufferes)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Bufferes != m.Bufferes {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.Bufferes-m.Bufferes)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
 
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.SwapFree != m.SwapFree {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.SwapFree-m.SwapFree)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.SwapFree != m.SwapFree {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.SwapFree-m.SwapFree)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}
-
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.SwapTotal != m.SwapTotal {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.SwapTotal-m.SwapTotal)))
-	} else {
-		memorySlice = append(memorySlice, "")
-	}
-
-	if History.DataPointMap[HighestHistoryIndex-1].Memory.SwapCached != m.SwapCached {
-		memorySlice = append(memorySlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Memory.SwapCached-m.SwapCached)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.SwapCached != m.SwapCached {
+		memorySlice = append(memorySlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].MemoryDynamic.SwapCached-m.SwapCached)))
 	} else {
 		memorySlice = append(memorySlice, "")
 	}

@@ -3,7 +3,6 @@ package stats
 import (
 	"io/ioutil"
 	"log"
-	"net"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -19,10 +18,10 @@ var History *HistoryBuffer
 
 const HighestHistoryIndex = 5
 
-type DataPoint struct {
-	Memory
-	Load
-	Disk
+type DynamicPoint struct {
+	MemoryDynamic
+	LoadDynamic
+	DiskDynamic
 	CPU string
 	//Host      string
 	General   string
@@ -31,17 +30,12 @@ type DataPoint struct {
 	Load15MIN float64
 }
 
+type StaticPoint struct {
+}
+
 type HistoryBuffer struct {
-	//disk              map[int]disk.UsageStat
-	//memory            map[int]mem.VirtualMemoryStat
-	//cpu               map[int]cpu.InfoStat
-	//cpuPercentage     map[int][]float64
-	//networkIF         map[int]net.Interface
-	//UploadAndDownload map[int][]float64
-	//Entropy           map[int]float64
-	//Load              map[int]float64
-	//LastCollection time.time
-	DataPointMap map[int]*DataPoint
+	StaticPointMap  map[int]*StaticPoint
+	DynamicPointMap map[int]*DynamicPoint
 }
 
 func fetchDISK() {
@@ -108,66 +102,6 @@ func GetHost() string {
 	host = host + "," + hostStat.VirtualizationSystem
 	host = host + "," + strconv.FormatUint(hostStat.BootTime, 10)
 	return host
-}
-
-func fetchNetworkIFS() {
-	interfStat, err := net.Interfaces()
-	helpers.PanicX(err)
-
-	for _, interf := range interfStat {
-
-		log.Println("Name:", interf.Name)
-		log.Println("HardwareAddr:", interf.HardwareAddr)
-		addrs, err := interf.Addrs()
-		helpers.PanicX(err)
-		for _, addr := range addrs {
-			log.Println("ADDR:::", addr)
-		}
-		maddrs, err := interf.MulticastAddrs()
-		helpers.PanicX(err)
-		for _, addr := range maddrs {
-			log.Println("MULTICAST ADDS:::", addr)
-		}
-		log.Println("flags", interf.Flags)
-		log.Println("mtu", interf.MTU)
-		log.Println("index", interf.Index)
-		//for _, flag := range interf.Flags {
-		//	log.Println("FLAG:::", flag)
-		//}
-		//getUploadDownload(interf.Name)
-
-	}
-}
-
-func getUploadDownload(ifname string) {
-	file, err := ioutil.ReadFile("/proc/net/dev") // O_RDONLY mode
-	if err != nil {
-		log.Fatal(err)
-	}
-	//defer file.Close()
-	filestring := string(file)
-	//log.Println("=============================")
-	//log.Println(filestring)
-	//log.Println("=============================")
-	fileSplit := strings.Split(filestring, "\n")
-	for _, v := range fileSplit {
-		if strings.Contains(v, ifname) {
-			vSplit := strings.Split(v, " ")
-			//for i, v := range vSplit {
-			//	log.Println(i, ":", v)
-			//}
-			log.Println("Download bytes:", vSplit[1])
-			log.Println("Download packets:", vSplit[2])
-			log.Println("Upload bytes:", vSplit[39])
-			log.Println("Upload packates:", vSplit[41])
-		}
-		//if v == ifname {
-		//	log.Println(i, ":", v)
-		//	return "FOUND IT!"
-		//}
-	}
-	//log.Println(fileSplit[247])
-
 }
 
 func STATSEntropy() string {
@@ -241,28 +175,28 @@ func getProcesses() {
 
 func InitStats() {
 	History = &HistoryBuffer{
-		DataPointMap: make(map[int]*DataPoint),
+		DynamicPointMap: make(map[int]*DynamicPoint),
+		StaticPointMap:  make(map[int]*StaticPoint),
 	}
 }
-func CollectData() string {
-	// move datapoints
+func CollectDynamicData() string {
+	// move DynamicPoints
 	// TODO: do better
-	if History.DataPointMap[HighestHistoryIndex] != nil {
-		History.DataPointMap[HighestHistoryIndex-1] = History.DataPointMap[HighestHistoryIndex]
-		//helpers.DebugLog("second index", History.DataPointMap[HighestHistoryIndex-1])
+	if History.DynamicPointMap[HighestHistoryIndex] != nil {
+		History.DynamicPointMap[HighestHistoryIndex-1] = History.DynamicPointMap[HighestHistoryIndex]
+		//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
 	} else {
-		History.DataPointMap[HighestHistoryIndex-1] = &DataPoint{}
-
+		History.DynamicPointMap[HighestHistoryIndex-1] = &DynamicPoint{}
 	}
 
-	History.DataPointMap[HighestHistoryIndex] = &DataPoint{}
-	//helpers.DebugLog("current index", History.DataPointMap[HighestHistoryIndex])
-	//helpers.DebugLog("second index", History.DataPointMap[HighestHistoryIndex-1])
+	History.DynamicPointMap[HighestHistoryIndex] = &DynamicPoint{}
+	//helpers.DebugLog("current index", History.DynamicPointMap[HighestHistoryIndex])
+	//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
 
 	// start
-	collectLoad(History.DataPointMap[HighestHistoryIndex])
-	collectMemory(History.DataPointMap[HighestHistoryIndex])
-	collectDisk(History.DataPointMap[HighestHistoryIndex])
+	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
+	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
+	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
 
 	return PrepareDataForShipping()
 }
@@ -271,9 +205,9 @@ func AnalyzeData() {
 	log.Println("ANALYZE data point")
 }
 func PrepareDataForShipping() (data string) {
-	data = History.DataPointMap[HighestHistoryIndex].Memory.GetFormattedString() + ":"
-	data = data + History.DataPointMap[HighestHistoryIndex].Load.GetFormattedString() + " :"
-	data = data + History.DataPointMap[HighestHistoryIndex].Disk.GetFormattedString()
+	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ":"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].LoadDynamic.GetFormattedString() + " :"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedString()
 
 	return
 }

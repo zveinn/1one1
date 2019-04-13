@@ -8,68 +8,70 @@ import (
 	"github.com/zkynetio/lynx/helpers"
 )
 
-type Disk struct {
-	Serial         string
-	Total          uint64
+type DiskStatic struct {
+	Serial string
+	Total  uint64
+	Path   string
+	FSType string
+}
+type DiskDynamic struct {
 	Free           uint64
 	Used           uint64
 	UsedPercentage float64
-	Path           string
-	FSType         string
 	INodesTotal    uint64
 	INodesUsed     uint64
 	INodesFree     uint64
 }
 
-func collectDisk(dp *DataPoint) {
+func collectDiskDynamic(dp *DynamicPoint) {
 	diskStat, err := disk.Usage("/")
 	helpers.PanicX(err)
 
-	dp.Disk = Disk{
-		Total:          diskStat.Total,
+	dp.DiskDynamic = DiskDynamic{
+		//Total:          diskStat.Total,
 		Free:           diskStat.Free,
 		Used:           diskStat.Used,
 		UsedPercentage: diskStat.UsedPercent,
-		Path:           diskStat.Path,
-		FSType:         diskStat.Fstype,
-		INodesFree:     diskStat.InodesFree,
-		INodesTotal:    diskStat.InodesTotal,
-		INodesUsed:     diskStat.InodesUsed,
+		//Path:           diskStat.Path,
+		//FSType:         diskStat.Fstype,
+		INodesFree:  diskStat.InodesFree,
+		INodesTotal: diskStat.InodesTotal,
+		INodesUsed:  diskStat.InodesUsed,
 	}
 }
 
-func (d *Disk) GetFormattedString() string {
+func (d *DiskDynamic) GetFormattedString() string {
 	var diskSlice []string
 
 	// TODO? ALERTS ON DISK CHANGES !!!!!
-	diskSlice = append(diskSlice, strconv.FormatFloat(History.DataPointMap[HighestHistoryIndex-1].Disk.UsedPercentage, 'f', 6, 64))
+	diskSlice = append(diskSlice, strconv.FormatFloat(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.UsedPercentage, 'f', 6, 64))
 
-	if History.DataPointMap[HighestHistoryIndex-1].Disk.Free != d.Free {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Disk.Free-d.Free)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Free != d.Free {
+		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Free-d.Free)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
-	if History.DataPointMap[HighestHistoryIndex-1].Disk.Used != d.Used {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Disk.Used-d.Used)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Used != d.Used {
+		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Used-d.Used)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
-	if History.DataPointMap[HighestHistoryIndex-1].Disk.INodesTotal != d.INodesTotal {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Disk.INodesTotal-d.INodesTotal)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesTotal != d.INodesTotal {
+		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesTotal-d.INodesTotal)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
-	if History.DataPointMap[HighestHistoryIndex-1].Disk.INodesFree != d.INodesFree {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Disk.INodesFree-d.INodesFree)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesFree != d.INodesFree {
+		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesFree-d.INodesFree)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
-	if History.DataPointMap[HighestHistoryIndex-1].Disk.INodesUsed != d.INodesUsed {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DataPointMap[HighestHistoryIndex-1].Disk.INodesUsed-d.INodesUsed)))
+	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesUsed != d.INodesUsed {
+		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesUsed-d.INodesUsed)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
