@@ -22,7 +22,8 @@ type DynamicPoint struct {
 	MemoryDynamic
 	LoadDynamic
 	DiskDynamic
-	CPU string
+	NetworkDynamic []*NetworkInterface
+	CPU            string
 	//Host      string
 	General   string
 	Load1MIN  float64
@@ -31,6 +32,7 @@ type DynamicPoint struct {
 }
 
 type StaticPoint struct {
+	NetworkStaticList map[string]*NetworkStatic
 }
 
 type HistoryBuffer struct {
@@ -194,6 +196,7 @@ func CollectDynamicData() string {
 	//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
 
 	// start
+	collectNetworkDownloadAndUpload(History.DynamicPointMap[HighestHistoryIndex])
 	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
 	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
 	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])

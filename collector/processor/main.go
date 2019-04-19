@@ -106,15 +106,15 @@ func (collector *Collector) MaintainControllerCommunications() {
 }
 
 func (collector *Collector) CollectStats() {
-	defer func() {
-		if r := recover(); r != nil {
-			helpers.DebugLog("recovered in stats collecting rutine", r)
-			return
-		}
-	}()
+	//defer func() {
+	//	if r := recover(); r != nil {
+	//		helpers.DebugLog("recovered in stats collecting rutine", r)
+	//		return
+	//	}
+	//}()
 	for {
 		data := stats.CollectDynamicData()
-		stats.FetchNetworkIFS()
+
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 		// TODO: make randomizer !h
 		for _, controller := range collector.Controllers {
