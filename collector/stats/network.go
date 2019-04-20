@@ -37,6 +37,10 @@ type NetworkInterface struct {
 	OUT  *OUT
 }
 
+type NetworkDynamic struct {
+	Interfaces map[string]*NetworkInterface
+}
+
 type NetworkStatic struct {
 	Name               string
 	HardwareAddress    []byte
@@ -84,19 +88,95 @@ func collectNetworkInterfaces(sp *StaticPoint) {
 func collectNetworkDownloadAndUpload(dp *DynamicPoint) {
 	//getUploadDownload("enp0s31f6")
 	networkInterfaces := getAllInterfacesDownloadAndUploadStats()
-	dp.NetworkDynamic = networkInterfaces
+	dp.NetworkDynamic = NetworkDynamic{Interfaces: networkInterfaces}
 }
-func (dn *NetworkInterface) GetFormattedString(index int) {
+func (nd *NetworkDynamic) GetFormattedString() string {
 	var interfaceslice []string
+	if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces != nil {
+		changeCount := 0
 
-	if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic[index].IN.Bytes != dn.IN.Bytes {
-		interfaceslice = append(interfaceslice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic[index].IN.Bytes-dn.IN.Bytes)))
-	} else {
-		interfaceslice = append(interfaceslice, "")
+		for i, v := range nd.Interfaces {
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Bytes != v.IN.Bytes {
+				interfaceslice = append(interfaceslice, "ib:"+strconv.Itoa(int(v.IN.Bytes-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Bytes)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Packets != v.IN.Packets {
+				interfaceslice = append(interfaceslice, "ip:"+strconv.Itoa(int(v.IN.Packets-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Packets)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Errors != v.IN.Errors {
+				interfaceslice = append(interfaceslice, "ie:"+strconv.Itoa(int(v.IN.Errors-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Errors)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Dropped != v.IN.Dropped {
+				interfaceslice = append(interfaceslice, "id:"+strconv.Itoa(int(v.IN.Dropped-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Dropped)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Frame != v.IN.Frame {
+				interfaceslice = append(interfaceslice, "if:"+strconv.Itoa(int(v.IN.Frame-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Frame)))
+				changeCount++
+			}
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Compressed != v.IN.Compressed {
+				interfaceslice = append(interfaceslice, "ic:"+strconv.Itoa(int(v.IN.Compressed-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Compressed)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Multicast != v.IN.Multicast {
+				interfaceslice = append(interfaceslice, "im:"+strconv.Itoa(int(v.IN.Multicast-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].IN.Multicast)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Bytes != v.OUT.Bytes {
+				interfaceslice = append(interfaceslice, "ob:"+strconv.Itoa(int(v.OUT.Bytes-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Bytes)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Packets != v.OUT.Packets {
+				interfaceslice = append(interfaceslice, "op:"+strconv.Itoa(int(v.OUT.Packets-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Packets)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Errors != v.OUT.Errors {
+				interfaceslice = append(interfaceslice, "oe:"+strconv.Itoa(int(v.OUT.Errors-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Errors)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Dropped != v.OUT.Dropped {
+				interfaceslice = append(interfaceslice, "od:"+strconv.Itoa(int(v.OUT.Dropped-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Dropped)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Frame != v.OUT.Frame {
+				interfaceslice = append(interfaceslice, "of:"+strconv.Itoa(int(v.OUT.Frame-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Frame)))
+				changeCount++
+			}
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Compressed != v.OUT.Compressed {
+				interfaceslice = append(interfaceslice, "oc:"+strconv.Itoa(int(v.OUT.Compressed-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Compressed)))
+				changeCount++
+			}
+
+			if History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Multicast != v.OUT.Multicast {
+				interfaceslice = append(interfaceslice, "om:"+strconv.Itoa(int(v.OUT.Multicast-History.DynamicPointMap[HighestHistoryIndex-1].NetworkDynamic.Interfaces[i].OUT.Multicast)))
+				changeCount++
+			}
+
+			if changeCount > 0 {
+				interfaceslice = append(interfaceslice, "in:"+v.Name)
+			}
+			changeCount = 0
+		}
 	}
 
+	//log.Println(interfaceslice)
+	return strings.Join(interfaceslice, ",")
+
 }
-func getAllInterfacesDownloadAndUploadStats() []*NetworkInterface {
+func getAllInterfacesDownloadAndUploadStats() map[string]*NetworkInterface {
 	defer func() {
 		r := recover()
 		if r != nil {
@@ -123,7 +203,7 @@ func getAllInterfacesDownloadAndUploadStats() []*NetworkInterface {
 	}
 
 	//log.Println(downloadAndUploadList)
-	var NIFL []*NetworkInterface
+	NIFL := make(map[string]*NetworkInterface)
 	var NIF *NetworkInterface
 	//indexPostName := 0
 	for i, v := range downloadAndUploadList {
@@ -169,7 +249,7 @@ func getAllInterfacesDownloadAndUploadStats() []*NetworkInterface {
 				NIF.OUT.Frame = fv14
 				NIF.OUT.Compressed = fv15
 				NIF.OUT.Multicast = fv16
-				NIFL = append(NIFL, NIF)
+				NIFL[NIF.Name] = NIF
 
 			}
 

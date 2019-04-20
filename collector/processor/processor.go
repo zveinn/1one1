@@ -77,6 +77,8 @@ func (collector *Collector) EngageControllerCommunications() {
 			go controller.Listen()
 			go controller.OpenSendChannel()
 			helpers.DebugLog("Sending final ok ..")
+
+			// STEP 10
 			_, err := controller.Conn.Write([]byte("k\n"))
 			helpers.PanicX(err)
 			controller.ChangeListenerStatus(true)
@@ -106,24 +108,15 @@ func (collector *Collector) MaintainControllerCommunications() {
 }
 
 func (collector *Collector) CollectStats() {
-	//defer func() {
-	//	if r := recover(); r != nil {
-	//		helpers.DebugLog("recovered in stats collecting rutine", r)
-	//		return
-	//	}
-	//}()
 	for {
 		data := stats.CollectDynamicData()
-
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-		// TODO: make randomizer !h
 		for _, controller := range collector.Controllers {
 			if controller.ReadyToReceive {
 				controller.Send <- data + "\n"
 			}
 		}
 	}
-
 }
 
 type Controller struct {
@@ -219,10 +212,13 @@ func dialController(controller *Controller) (err error) {
 	return
 }
 func handShakeWithController(controller *Controller, tag string) (err error) {
+	// STEP 1
+	// send TAG to controller
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
 
-	// get namespaces
+	// STEP 4
+	// Listening for namespaces from controller
 	message, err := bufio.NewReader(controller.Conn).ReadString('\n')
 	if !strings.Contains(message, "ns:") {
 		_ = controller.Conn.Close()
@@ -237,14 +233,19 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 	NS = namespaces
 	controller.HaveNamespacesBeenDelivered(true)
 
-	// send ok back
+	// STEP 5
+	// sending OK
 	helpers.DebugLog("sending ok !")
 	_, err = controller.Conn.Write([]byte("k\n"))
 	helpers.PanicX(err)
 
-	// send host data
+	// STEP 8
+	// sending host data
 	helpers.DebugLog("sending host data")
-	_, err = controller.Conn.Write([]byte(stats.GetHost() + "\n"))
+	helpers.DebugLog(stats.GetHost())
+	//initialData := ""
+	//_, err = controller.Conn.Write([]byte(stats.GetHost() + "\n"))
+	_, err = controller.Conn.Write([]byte(stats.GetStaticDataPoint() + "\n"))
 	helpers.PanicX(err)
 	controller.ChangeActiveStatus(true)
 	return

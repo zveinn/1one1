@@ -47,31 +47,31 @@ func (d *DiskDynamic) GetFormattedString() string {
 	diskSlice = append(diskSlice, strconv.FormatFloat(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.UsedPercentage, 'f', 6, 64))
 
 	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Free != d.Free {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Free-d.Free)))
+		diskSlice = append(diskSlice, strconv.Itoa(int(d.Free-History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Free)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
 	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Used != d.Used {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Used-d.Used)))
+		diskSlice = append(diskSlice, strconv.Itoa(int(d.Used-History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.Used)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
 	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesTotal != d.INodesTotal {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesTotal-d.INodesTotal)))
+		diskSlice = append(diskSlice, strconv.Itoa(int(d.INodesTotal-History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesTotal)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
 	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesFree != d.INodesFree {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesFree-d.INodesFree)))
+		diskSlice = append(diskSlice, strconv.Itoa(int(d.INodesFree-History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesFree)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}
 
 	if History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesUsed != d.INodesUsed {
-		diskSlice = append(diskSlice, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesUsed-d.INodesUsed)))
+		diskSlice = append(diskSlice, strconv.Itoa(int(d.INodesUsed-History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic.INodesUsed)))
 	} else {
 		diskSlice = append(diskSlice, "")
 	}

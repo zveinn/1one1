@@ -3,14 +3,10 @@ package stats
 import (
 	"io/ioutil"
 	"log"
-	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/process"
 	"github.com/zkynetio/lynx/helpers"
 )
 
@@ -22,8 +18,9 @@ type DynamicPoint struct {
 	MemoryDynamic
 	LoadDynamic
 	DiskDynamic
-	NetworkDynamic []*NetworkInterface
-	CPU            string
+	NetworkDynamic
+	EntropyDynamic
+	CPU string
 	//Host      string
 	General   string
 	Load1MIN  float64
@@ -33,6 +30,7 @@ type DynamicPoint struct {
 
 type StaticPoint struct {
 	NetworkStaticList map[string]*NetworkStatic
+	HostStatic
 }
 
 type HistoryBuffer struct {
@@ -88,24 +86,6 @@ func fetchCPU() {
 
 }
 
-func GetHost() string {
-	hostStat, err := host.Info()
-	helpers.PanicX(err)
-	host := "h:::" + hostStat.Hostname
-	host = host + "," + hostStat.HostID
-	host = host + "," + hostStat.KernelVersion
-	host = host + "," + hostStat.OS
-	host = host + "," + hostStat.Platform
-	host = host + "," + hostStat.PlatformFamily
-	host = host + "," + hostStat.PlatformVersion
-	//	host = host + "," + strconv.FormatUint(hostStat.Procs, 10)
-	host = host + "," + strconv.FormatUint(hostStat.Uptime, 10)
-	host = host + "," + hostStat.VirtualizationRole
-	host = host + "," + hostStat.VirtualizationSystem
-	host = host + "," + strconv.FormatUint(hostStat.BootTime, 10)
-	return host
-}
-
 func STATSEntropy() string {
 	file, err := ioutil.ReadFile("/proc/sys/kernel/random/entropy_avail") // O_RDONLY mode
 	if err != nil {
@@ -143,36 +123,6 @@ func getUsers() {
 	//log.Println("users", string(file))
 }
 
-func getActiveSessions() {
-
-	out, err := exec.Command("bash", "-c", "who -a").Output()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(out)
-}
-
-func getProcesses() {
-	ps, err := process.Processes()
-	helpers.PanicX(err)
-	//log.Println(ps)
-	for _, v := range ps {
-		usernme, err := v.Username()
-		helpers.PanicX(err)
-
-		status, err := v.Status()
-		helpers.PanicX(err)
-		connections, err := v.Connections()
-		helpers.PanicX(err)
-		log.Println(usernme, v.Pid, status)
-		for _, v := range connections {
-			if v.Status != "NONE" {
-				log.Println(v)
-			}
-		}
-	}
-}
-
 // ANAL-ISIS
 
 func InitStats() {
@@ -200,6 +150,7 @@ func CollectDynamicData() string {
 	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
 	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
 	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
+	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
 
 	return PrepareDataForShipping()
 }
@@ -208,9 +159,18 @@ func AnalyzeData() {
 	log.Println("ANALYZE data point")
 }
 func PrepareDataForShipping() (data string) {
-	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ":"
-	data = data + History.DynamicPointMap[HighestHistoryIndex].LoadDynamic.GetFormattedString() + " :"
-	data = data + History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedString()
-
+	getProcesses()
+	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ";"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].LoadDynamic.GetFormattedString() + ";"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedString() + ";"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].EntropyDynamic.GetFormattedString() + ";"
+	data = data + History.DynamicPointMap[HighestHistoryIndex].NetworkDynamic.GetFormattedString()
 	return
+}
+
+func GetStaticDataPoint() string {
+	data := "h:::"
+	data = data + GetHost()
+	log.Println(data)
+	return data
 }

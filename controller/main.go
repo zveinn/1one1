@@ -18,6 +18,29 @@ import (
 	"github.com/zkynetio/lynx/helpers"
 )
 
+func main() {
+	rand.Seed(time.Now().Unix())
+	loadEnvironmentVariables()
+
+	controller := Controller{
+		IP:                   os.Getenv("IP"),
+		PORT:                 os.Getenv("PORT"),
+		Collectors:           make(map[string]*Collector),
+		Buffer:               make(chan string, 10000),
+		BufferDirectoryPath:  "./buffers/",
+		MinLinesInBufferFile: 10,
+	}
+
+	defer controller.CleanupOnExit()
+	go controller.EngageBufferPipe()
+	controller.start()
+
+	// capture stop signal in order to exit gracefully.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+}
+
 type UI struct {
 	Conn        net.Conn
 	Filter      string
@@ -119,7 +142,21 @@ func deliverNamespaces(conn net.Conn) {
 	_, err := conn.Write([]byte("ns:general.entropy,memory.total\n"))
 	helpers.PanicX(err)
 }
+func receiveConnection(conn net.Conn, controller *Controller) {
+	helpers.DebugLog("Connection from:", conn.RemoteAddr())
 
+	message, _ := bufio.NewReader(conn).ReadString('\n')
+	if message == "ui\n" {
+		connectUI(&UI{Conn: conn}, controller, message)
+	} else {
+		// STEP 2
+		// Connect a collector
+		connectCollector(&Collector{
+			LastCheckin: time.Now(),
+			Conn:        conn,
+		}, controller, message)
+	}
+}
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	helpers.DebugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
 	collector.TAG = strings.TrimSuffix(message, "\n")
@@ -129,10 +166,13 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		helpers.DebugLog("Closing read pipe from", collector.TAG)
 		controller.RemoveCollector(collector.TAG)
 	}()
-	// accept connection
-	//_, err := collector.Conn.Write([]byte("k\n"))
+
+	// STEP 3
+	// Send namespaces to collector
 	deliverNamespaces(collector.Conn)
-	//	helpers.PanicX(err)
+
+	// STEP 6
+	// Listen for an OK
 	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
 	if msg == "k\n" {
 		helpers.DebugLog("K from collector")
@@ -140,9 +180,9 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		helpers.DebugLog(msg)
 		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
 	}
-	// send namespaces
 
-	// wait for host data
+	// STEP 7
+	// Listen for host data
 	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
 	data := strings.Split(msg, ":::")
 	if !strings.Contains(data[0], "h") {
@@ -150,7 +190,8 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	}
 	helpers.DebugLog("HOST DATA:", data[1])
 
-	// waiting for final okey
+	// STEP 9
+	// Listen for final OK
 	helpers.DebugLog("waiting for final ok ...")
 	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
 	if msg != "k\n" {
@@ -182,18 +223,6 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 	}
 }
 
-func receiveConnection(conn net.Conn, controller *Controller) {
-	helpers.DebugLog("Connection from:", conn.RemoteAddr())
-	message, _ := bufio.NewReader(conn).ReadString('\n')
-	if message == "ui\n" {
-		connectUI(&UI{Conn: conn}, controller, message)
-	} else {
-		connectCollector(&Collector{
-			LastCheckin: time.Now(),
-			Conn:        conn,
-		}, controller, message)
-	}
-}
 func (c *Controller) sendToAllUis(msg string) {
 	for _, ui := range c.UIs {
 		ui.SendChannel <- msg
@@ -253,27 +282,4 @@ func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
 	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	helpers.PanicX(err)
 	buffer.WriteTo(file)
-}
-
-func main() {
-	rand.Seed(time.Now().Unix())
-	loadEnvironmentVariables()
-
-	controller := Controller{
-		IP:                   os.Getenv("IP"),
-		PORT:                 os.Getenv("PORT"),
-		Collectors:           make(map[string]*Collector),
-		Buffer:               make(chan string, 10000),
-		BufferDirectoryPath:  "./buffers/",
-		MinLinesInBufferFile: 10,
-	}
-
-	defer controller.CleanupOnExit()
-	go controller.EngageBufferPipe()
-	controller.start()
-
-	// capture stop signal in order to exit gracefully.
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
 }
