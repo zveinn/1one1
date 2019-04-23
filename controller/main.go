@@ -139,7 +139,7 @@ func connectUI(ui *UI, controller *Controller, tag string) {
 }
 
 func deliverNamespaces(conn net.Conn) {
-	_, err := conn.Write([]byte("ns:general.entropy,memory.total\n"))
+	_, err := conn.Write([]byte("NS|general.entropy:5,memory.total:5\n"))
 	helpers.PanicX(err)
 }
 func receiveConnection(conn net.Conn, controller *Controller) {
@@ -184,11 +184,10 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	// STEP 7
 	// Listen for host data
 	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
-	data := strings.Split(msg, ":::")
-	if !strings.Contains(data[0], "h") {
+	if !strings.Contains(string(msg), "H||") {
 		helpers.PanicX(errors.New("no host data found in handskae" + string(msg)))
 	}
-	helpers.DebugLog("HOST DATA:", data[1])
+	helpers.DebugLog("HOST DATA:", string(msg))
 
 	// STEP 9
 	// Listen for final OK
@@ -231,7 +230,7 @@ func (c *Controller) sendToAllUis(msg string) {
 func (c *Controller) parseIncomingData(msg string) {
 	msg = strings.TrimSuffix(msg, "\n")
 
-	helpers.DebugLog("DATA:", msg)
+	//helpers.DebugLog("DATA:", msg)
 	c.Buffer <- msg
 }
 func (c *Controller) EngageBufferPipe() {

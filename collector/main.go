@@ -21,17 +21,20 @@ func main() {
 	collector.GetIntervalsFromEnvironmentVariables()
 	defer collector.CleanupOnExit()
 
+	stats.InitStats()
+
 	processor.ConnectToControllers(
 		os.Getenv("CONTROLLERS"),
 		os.Getenv("TAG"),
 		collector,
 	)
 
-	stats.InitStats()
-
 	go collector.EngageControllerCommunications()
 	go collector.MaintainControllerCommunications()
+	// Each stats category should be it's own goroutine?
 	go collector.CollectStats()
+	// todo
+	// go collector.SendStats()
 
 	if os.Getenv("DEBUG") == "true" {
 		helpers.DebugLog(collector)

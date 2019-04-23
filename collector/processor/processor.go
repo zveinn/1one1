@@ -16,6 +16,7 @@ import (
 )
 
 var NS []string
+var NSList map[string]int
 
 type Collector struct {
 	Buffer             chan string
@@ -168,7 +169,7 @@ func (c *Controller) OpenSendChannel() {
 		if !errx {
 			break
 		}
-		helpers.DebugLog("sending to controller:", data)
+		//helpers.DebugLog("sending to controller:", data)
 		_, err := c.Conn.Write([]byte(data))
 		if err != nil {
 			helpers.DebugLog("ERROR WHEN WRITING STATS:", err)
@@ -220,7 +221,7 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 	// STEP 4
 	// Listening for namespaces from controller
 	message, err := bufio.NewReader(controller.Conn).ReadString('\n')
-	if !strings.Contains(message, "ns:") {
+	if !strings.Contains(message, "NS|") {
 		_ = controller.Conn.Close()
 		controller.Setconnection(nil)
 		// TODO: handle better
@@ -228,6 +229,8 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 		return
 	}
 
+	// TODO: refactor into NSList global
+	// see readme
 	namespaces := strings.Split(strings.Split(strings.TrimSuffix(message, "\n"), ":")[1], ",")
 	log.Println("NAMESPACES:", namespaces)
 	NS = namespaces
@@ -241,10 +244,6 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 
 	// STEP 8
 	// sending host data
-	helpers.DebugLog("sending host data")
-	helpers.DebugLog(stats.GetHost())
-	//initialData := ""
-	//_, err = controller.Conn.Write([]byte(stats.GetHost() + "\n"))
 	_, err = controller.Conn.Write([]byte(stats.GetStaticDataPoint() + "\n"))
 	helpers.PanicX(err)
 	controller.ChangeActiveStatus(true)

@@ -37,10 +37,10 @@ func collectStaticHostData(sp *StaticPoint) {
 	}
 }
 
-func GetFormattedString() string {
+func (hs *HostStatic) GetFormattedString() string {
 	hostStat, err := host.Info()
 	helpers.PanicX(err)
-	host := hostStat.Hostname
+	host := "H||" + hostStat.Hostname
 	host = host + "," + hostStat.HostID
 	host = host + "," + hostStat.KernelVersion
 	host = host + "," + hostStat.OS

@@ -43,7 +43,7 @@ type NetworkDynamic struct {
 
 type NetworkStatic struct {
 	Name               string
-	HardwareAddress    []byte
+	HardwareAddress    string
 	Addresses          []string
 	MulticastAddresses []string
 	Flags              uint
@@ -73,7 +73,7 @@ func collectNetworkInterfaces(sp *StaticPoint) {
 		}
 		NetworkStaticPoint := &NetworkStatic{
 			Name:               nif.Name,
-			HardwareAddress:    nif.HardwareAddr,
+			HardwareAddress:    nif.HardwareAddr.String(),
 			Addresses:          networkAddressLis,
 			MulticastAddresses: multiAddressList,
 			Flags:              uint(nif.Flags),
@@ -83,10 +83,25 @@ func collectNetworkInterfaces(sp *StaticPoint) {
 		NetworkStaticList[nif.Name] = NetworkStaticPoint
 	}
 
-	sp.NetworkStaticList = NetworkStaticList
+	sp.NetworkStatic = NetworkStaticList
 }
+
+func getFormattedStringForInterfaces(nsl map[string]*NetworkStatic) string {
+
+	var composition []string
+	for name, nif := range nsl {
+		composition = append(composition, "N||"+name)
+		composition = append(composition, ""+strings.Join(nif.Addresses, ","))
+		composition = append(composition, ""+strings.Join(nif.MulticastAddresses, ","))
+		composition = append(composition, ""+nif.HardwareAddress)
+		composition = append(composition, ""+strconv.Itoa(int(nif.Flags)))
+		composition = append(composition, ""+strconv.Itoa(nif.Index))
+		composition = append(composition, ""+strconv.Itoa(nif.MTU))
+	}
+	return strings.Join(composition, ",")
+}
+
 func collectNetworkDownloadAndUpload(dp *DynamicPoint) {
-	//getUploadDownload("enp0s31f6")
 	networkInterfaces := getAllInterfacesDownloadAndUploadStats()
 	dp.NetworkDynamic = NetworkDynamic{Interfaces: networkInterfaces}
 }
