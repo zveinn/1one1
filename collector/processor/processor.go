@@ -186,6 +186,7 @@ func (c *Controller) Listen() {
 		close(c.Send)
 		c.ChangeActiveStatus(false)
 		c.ChangeListenerStatus(false)
+		c.ChangeReceivingStatus(false)
 		c.Setconnection(nil)
 		c.HaveNamespacesBeenDelivered(false)
 	}()
