@@ -38,6 +38,11 @@ func InitStats() {
 		StaticPointMap:  make(map[int]*StaticPoint),
 	}
 }
+func CollectDynamicData2() []byte {
+	//var data []byte
+
+	return nil
+}
 func CollectDynamicData() string {
 	// move DynamicPoints
 	// TODO: do better
@@ -58,7 +63,7 @@ func CollectDynamicData() string {
 	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
 	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
 	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
-
+	_ = History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedBytes()
 	var data string
 	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ";"
 	data = data + History.DynamicPointMap[HighestHistoryIndex].LoadDynamic.GetFormattedString() + ";"

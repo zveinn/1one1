@@ -1,6 +1,8 @@
 package stats
 
 import (
+	"bytes"
+	"log"
 	"strconv"
 	"strings"
 
@@ -40,6 +42,22 @@ func collectDiskDynamic(dp *DynamicPoint) {
 	}
 }
 
+func (d *DiskDynamic) GetFormattedBytes() []byte {
+	var data []byte
+	var buffer bytes.Buffer
+	index := History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic
+	// Disk free space state change
+	if index.Free != d.Free {
+		d := index.Free - d.Free
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		data = append(data, length)
+		data = append(data, buffer.Bytes()...)
+
+		buffer.Reset()
+	}
+	log.Println(data)
+	return data
+}
 func (d *DiskDynamic) GetFormattedString() string {
 	var diskSlice []string
 
