@@ -44,19 +44,59 @@ func collectDiskDynamic(dp *DynamicPoint) {
 
 func (d *DiskDynamic) GetFormattedBytes() []byte {
 	var data []byte
+	var headers []byte
+	var dataAndHeader []byte
 	var buffer bytes.Buffer
 	index := History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic
 	// Disk free space state change
 	if index.Free != d.Free {
 		d := index.Free - d.Free
 		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		data = append(data, length)
+		headers = append(headers, length)
 		data = append(data, buffer.Bytes()...)
-
 		buffer.Reset()
 	}
-	log.Println(data)
-	return data
+
+	if index.Used != d.Used {
+		d := index.Used - d.Used
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		headers = append(headers, length)
+		data = append(data, buffer.Bytes()...)
+		buffer.Reset()
+	}
+
+	if index.INodesTotal != d.INodesTotal {
+		d := index.INodesTotal - d.INodesTotal
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		headers = append(headers, length)
+		data = append(data, buffer.Bytes()...)
+		buffer.Reset()
+	}
+	if index.INodesFree != d.INodesFree {
+		d := index.INodesFree - d.INodesFree
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		headers = append(headers, length)
+		data = append(data, buffer.Bytes()...)
+		buffer.Reset()
+	}
+	if index.INodesUsed != d.INodesUsed {
+		d := index.INodesUsed - d.INodesUsed
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		headers = append(headers, length)
+		data = append(data, buffer.Bytes()...)
+		buffer.Reset()
+	}
+	if index.UsedPercentage != d.UsedPercentage {
+		d := index.UsedPercentage - d.UsedPercentage
+		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		headers = append(headers, length)
+		data = append(data, buffer.Bytes()...)
+		buffer.Reset()
+	}
+	dataAndHeader = append(dataAndHeader, headers...)
+	dataAndHeader = append(dataAndHeader, data...)
+	log.Println("formatted bytes", dataAndHeader)
+	return dataAndHeader
 }
 func (d *DiskDynamic) GetFormattedString() string {
 	var diskSlice []string

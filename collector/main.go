@@ -33,6 +33,7 @@ func main() {
 	go collector.MaintainControllerCommunications()
 	// Each stats category should be it's own goroutine?
 	go collector.CollectStats()
+	
 	// todo
 	// go collector.SendStats()
 
