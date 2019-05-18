@@ -2,6 +2,8 @@ package stats
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -47,52 +49,76 @@ func (d *DiskDynamic) GetFormattedBytes() []byte {
 	var headers []byte
 	var dataAndHeader []byte
 	var buffer bytes.Buffer
+
 	index := History.DynamicPointMap[HighestHistoryIndex-1].DiskDynamic
+	var valueList []int64
 	// Disk free space state change
 	if index.Free != d.Free {
-		d := index.Free - d.Free
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		headers = append(headers, length)
-		data = append(data, buffer.Bytes()...)
-		buffer.Reset()
+		valueList = append(valueList, int64(index.Free)-int64(d.Free))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
 	}
 
 	if index.Used != d.Used {
-		d := index.Used - d.Used
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		headers = append(headers, length)
-		data = append(data, buffer.Bytes()...)
-		buffer.Reset()
+		valueList = append(valueList, int64(index.Used)-int64(d.Used))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
 	}
 
 	if index.INodesTotal != d.INodesTotal {
-		d := index.INodesTotal - d.INodesTotal
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		headers = append(headers, length)
-		data = append(data, buffer.Bytes()...)
-		buffer.Reset()
+		valueList = append(valueList, int64(index.INodesTotal)-int64(d.INodesTotal))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
 	}
 	if index.INodesFree != d.INodesFree {
-		d := index.INodesFree - d.INodesFree
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		headers = append(headers, length)
-		data = append(data, buffer.Bytes()...)
-		buffer.Reset()
+		valueList = append(valueList, int64(index.INodesFree)-int64(d.INodesFree))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
 	}
 	if index.INodesUsed != d.INodesUsed {
-		d := index.INodesUsed - d.INodesUsed
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		valueList = append(valueList, int64(index.INodesUsed)-int64(d.INodesUsed))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
+	}
+	if int64(index.UsedPercentage) != int64(d.UsedPercentage) {
+		valueList = append(valueList, int64(index.UsedPercentage)-int64(d.UsedPercentage))
+		// length := helpers.WriteIntToBuffer(&buffer, int64(d))
+		// headers = append(headers, length)
+		// data = append(data, buffer.Bytes()...)
+		// buffer.Reset()
+	}
+	// var bs []
+	// binary.LittleEndian.PutUint64(bs, uint64(1111))
+
+	// x := binary.LittleEndian.Uint64(bs[0:9])
+	// log.Println(x)
+	buf := new(bytes.Buffer)
+	var num int64 = 1234
+	err := binary.Write(buf, binary.LittleEndian, num)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+	}
+
+	// log.Println(int(buf.Bytes()))
+
+	log.Println(valueList)
+	for _, v := range valueList {
+		length := helpers.WriteIntToBuffer(&buffer, v)
 		headers = append(headers, length)
 		data = append(data, buffer.Bytes()...)
 		buffer.Reset()
 	}
-	if index.UsedPercentage != d.UsedPercentage {
-		d := index.UsedPercentage - d.UsedPercentage
-		length := helpers.WriteIntToBuffer(&buffer, int64(d))
-		headers = append(headers, length)
-		data = append(data, buffer.Bytes()...)
-		buffer.Reset()
-	}
+	log.Println()
 	dataAndHeader = append(dataAndHeader, headers...)
 	dataAndHeader = append(dataAndHeader, data...)
 	log.Println("formatted bytes", dataAndHeader)

@@ -6,7 +6,7 @@ import (
 
 var History *HistoryBuffer
 
-const HighestHistoryIndex = 5
+const HighestHistoryIndex = 2
 
 type DynamicPoint struct {
 	MemoryDynamic
@@ -28,8 +28,10 @@ type StaticPoint struct {
 }
 
 type HistoryBuffer struct {
-	StaticPointMap  map[int]*StaticPoint
-	DynamicPointMap map[int]*DynamicPoint
+	StaticPointMap   map[int]*StaticPoint
+	DynamicPointMap  map[int]*DynamicPoint
+	DynamicBasePoint *DynamicPoint
+	StaticBasePoint  *StaticPoint
 }
 
 func InitStats() {
@@ -38,31 +40,42 @@ func InitStats() {
 		StaticPointMap:  make(map[int]*StaticPoint),
 	}
 }
-func CollectDynamicData2() []byte {
+func CollectBasePoint() string {
 	//var data []byte
-
-	return nil
+	History.DynamicBasePoint = &DynamicPoint{}
+	collectNetworkDownloadAndUpload(History.DynamicBasePoint)
+	collectLoad(History.DynamicBasePoint)
+	collectMemory(History.DynamicBasePoint)
+	collectDiskDynamic(History.DynamicBasePoint)
+	collectEntropy(History.DynamicBasePoint)
+	return ""
 }
-func CollectDynamicData() string {
-	// move DynamicPoints
-	// TODO: do better
-	if History.DynamicPointMap[HighestHistoryIndex] != nil {
-		History.DynamicPointMap[HighestHistoryIndex-1] = History.DynamicPointMap[HighestHistoryIndex]
-		//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
-	} else {
-		History.DynamicPointMap[HighestHistoryIndex-1] = &DynamicPoint{}
-	}
-
+func FirstTimeCollection() {
 	History.DynamicPointMap[HighestHistoryIndex] = &DynamicPoint{}
-	//helpers.DebugLog("current index", History.DynamicPointMap[HighestHistoryIndex])
-	//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
-
-	// start
 	collectNetworkDownloadAndUpload(History.DynamicPointMap[HighestHistoryIndex])
 	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
 	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
 	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
 	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
+}
+func CollectDynamicData() string {
+	// move DynamicPoints
+	// TODO: do better
+	//helpers.DebugLog("current index", History.DynamicPointMap[HighestHistoryIndex])
+	//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
+
+	History.DynamicPointMap[HighestHistoryIndex-1] = History.DynamicPointMap[HighestHistoryIndex]
+	History.DynamicPointMap[HighestHistoryIndex] = &DynamicPoint{}
+	// log.Println(time.Now().Sub(*lastBasePoint))
+
+	collectNetworkDownloadAndUpload(History.DynamicPointMap[HighestHistoryIndex])
+	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
+	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
+	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
+	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
+
+	// start
+
 	_ = History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedBytes()
 	var data string
 	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ";"
@@ -70,6 +83,9 @@ func CollectDynamicData() string {
 	data = data + History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedString() + ";"
 	data = data + History.DynamicPointMap[HighestHistoryIndex].EntropyDynamic.GetFormattedString() + ";"
 	data = data + History.DynamicPointMap[HighestHistoryIndex].NetworkDynamic.GetFormattedString()
+	// log.Println("HH", History.DynamicPointMap[HighestHistoryIndex])
+	// log.Println("HH-1", History.DynamicPointMap[HighestHistoryIndex-1])
+
 	return data
 }
 
