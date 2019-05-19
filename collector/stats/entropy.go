@@ -31,5 +31,5 @@ func (d *EntropyDynamic) GetFormattedBytes(basePoint bool) []byte {
 	} else {
 		valueList = append(valueList, int64(d.Value)-int64(base.Value))
 	}
-	return helpers.WriteValueList(valueList)
+	return helpers.WriteValueList(valueList, "")
 }

@@ -65,5 +65,5 @@ func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
 		valueList = append(valueList, int64(d.Percentage)-int64(base.Percentage))
 	}
 
-	return helpers.WriteValueList(valueList)
+	return helpers.WriteValueList(valueList, "")
 }

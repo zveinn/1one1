@@ -57,5 +57,5 @@ func (d *DiskDynamic) GetFormattedBytes(basePoint bool) []byte {
 		valueList = append(valueList, int64(d.UsedPercentage)-int64(base.UsedPercentage))
 	}
 
-	return helpers.WriteValueList(valueList)
+	return helpers.WriteValueList(valueList, "")
 }

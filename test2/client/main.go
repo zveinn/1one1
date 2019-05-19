@@ -1,11 +1,21 @@
 package main
 
-import "net"
+import (
+	"log"
+	"strconv"
+)
 
 func main() {
 
-	// connect to this socket
-	conn, _ := net.Dial("tcp", "127.0.0.1:3333")
+	lengthstring := strconv.Itoa(4 + 1)
+	index := strconv.Itoa(10)
+	// final := index + lengthstring
 
-	conn.Write([]byte{55, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 255, 0, 0, 0, 0, 22, 43, 34, 34, 34, 34, 34, 34, 224, 0, 0, 0, 0})
+	final, _ := strconv.Atoi(index + lengthstring)
+	log.Println(byte(final))
+	log.Println(final)
+	buf := make([]byte, 10)
+	buf = append(buf, []byte{byte(final)}...)
+	// connect to this socket
+	log.Println(buf)
 }

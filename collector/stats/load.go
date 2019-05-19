@@ -33,5 +33,5 @@ func (d *LoadDynamic) GetFormattedBytes(basePoint bool) []byte {
 		valueList = append(valueList, int64(d.MIN5)-int64(base.MIN5))
 		valueList = append(valueList, int64(d.MIN15)-int64(base.MIN15))
 	}
-	return helpers.WriteValueList(valueList)
+	return helpers.WriteValueList(valueList, "")
 }
