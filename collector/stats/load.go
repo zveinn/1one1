@@ -1,9 +1,6 @@
 package stats
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/shirou/gopsutil/load"
 	"github.com/zkynetio/lynx/helpers"
 )
@@ -24,27 +21,17 @@ func collectLoad(dp *DynamicPoint) {
 		MIN15: ld.Load15,
 	}
 }
-
-func (l *LoadDynamic) GetFormattedString() string {
-	var loadString []string
-
-	if History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN1 != l.MIN1 {
-		loadString = append(loadString, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN1-l.MIN1)))
+func (d *LoadDynamic) GetFormattedBytes(basePoint bool) []byte {
+	var valueList []int64
+	base := History.DynamicBasePoint.LoadDynamic
+	if basePoint {
+		valueList = append(valueList, int64(base.MIN1))
+		valueList = append(valueList, int64(base.MIN5))
+		valueList = append(valueList, int64(base.MIN15))
 	} else {
-		loadString = append(loadString, "")
+		valueList = append(valueList, int64(d.MIN1)-int64(base.MIN1))
+		valueList = append(valueList, int64(d.MIN5)-int64(base.MIN5))
+		valueList = append(valueList, int64(d.MIN15)-int64(base.MIN15))
 	}
-
-	if History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN5 != l.MIN5 {
-		loadString = append(loadString, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN5-l.MIN5)))
-	} else {
-		loadString = append(loadString, "")
-	}
-
-	if History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN15 != l.MIN15 {
-		loadString = append(loadString, strconv.Itoa(int(History.DynamicPointMap[HighestHistoryIndex-1].LoadDynamic.MIN15-l.MIN15)))
-	} else {
-		loadString = append(loadString, "")
-	}
-
-	return strings.Join(loadString, ",")
+	return helpers.WriteValueList(valueList)
 }

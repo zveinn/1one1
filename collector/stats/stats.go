@@ -28,10 +28,11 @@ type StaticPoint struct {
 }
 
 type HistoryBuffer struct {
-	StaticPointMap   map[int]*StaticPoint
-	DynamicPointMap  map[int]*DynamicPoint
-	DynamicBasePoint *DynamicPoint
-	StaticBasePoint  *StaticPoint
+	StaticPointMap     map[int]*StaticPoint
+	DynamicPointMap    map[int]*DynamicPoint
+	DynamicUpdatePoint *DynamicPoint
+	DynamicBasePoint   *DynamicPoint
+	StaticBasePoint    *StaticPoint
 }
 
 func InitStats() {
@@ -50,41 +51,28 @@ func CollectBasePoint() string {
 	collectEntropy(History.DynamicBasePoint)
 	return ""
 }
-func FirstTimeCollection() {
-	History.DynamicPointMap[HighestHistoryIndex] = &DynamicPoint{}
-	collectNetworkDownloadAndUpload(History.DynamicPointMap[HighestHistoryIndex])
-	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
-	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
-	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
-	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
-}
-func CollectDynamicData() string {
-	// move DynamicPoints
-	// TODO: do better
-	//helpers.DebugLog("current index", History.DynamicPointMap[HighestHistoryIndex])
-	//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
 
+func CollectDynamicData() string {
 	History.DynamicPointMap[HighestHistoryIndex-1] = History.DynamicPointMap[HighestHistoryIndex]
 	History.DynamicPointMap[HighestHistoryIndex] = &DynamicPoint{}
 	// log.Println(time.Now().Sub(*lastBasePoint))
-
+	History.DynamicUpdatePoint = &DynamicPoint{}
 	collectNetworkDownloadAndUpload(History.DynamicPointMap[HighestHistoryIndex])
-	collectLoad(History.DynamicPointMap[HighestHistoryIndex])
-	collectMemory(History.DynamicPointMap[HighestHistoryIndex])
-	collectDiskDynamic(History.DynamicPointMap[HighestHistoryIndex])
-	collectEntropy(History.DynamicPointMap[HighestHistoryIndex])
+	// new
+	collectDiskDynamic(History.DynamicUpdatePoint)
+	collectLoad(History.DynamicUpdatePoint)
+	collectMemory(History.DynamicUpdatePoint)
+	collectEntropy(History.DynamicUpdatePoint)
+	var theBytes []byte
+	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
+	theBytes = append(theBytes, History.DynamicUpdatePoint.MemoryDynamic.GetFormattedBytes(false)...)
+	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
+	theBytes = append(theBytes, History.DynamicUpdatePoint.EntropyDynamic.GetFormattedBytes(false)...)
+	log.Println(theBytes)
+	// old
 
-	// start
-
-	_ = History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedBytes()
 	var data string
-	data = History.DynamicPointMap[HighestHistoryIndex].MemoryDynamic.GetFormattedString() + ";"
-	data = data + History.DynamicPointMap[HighestHistoryIndex].LoadDynamic.GetFormattedString() + ";"
-	data = data + History.DynamicPointMap[HighestHistoryIndex].DiskDynamic.GetFormattedString() + ";"
-	data = data + History.DynamicPointMap[HighestHistoryIndex].EntropyDynamic.GetFormattedString() + ";"
 	data = data + History.DynamicPointMap[HighestHistoryIndex].NetworkDynamic.GetFormattedString()
-	// log.Println("HH", History.DynamicPointMap[HighestHistoryIndex])
-	// log.Println("HH-1", History.DynamicPointMap[HighestHistoryIndex-1])
 
 	return data
 }

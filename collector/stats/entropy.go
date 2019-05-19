@@ -22,15 +22,14 @@ func collectEntropy(dp *DynamicPoint) {
 	helpers.PanicX(err)
 	dp.EntropyDynamic = EntropyDynamic{Value: entInt}
 }
-func (ed *EntropyDynamic) GetFormattedString() string {
-	var value string
-	//log.Println("OLD ENTROPY", History.DynamicPointMap[HighestHistoryIndex-1].EntropyDynamic.Value)
-	//log.Println("NEW ENT", ed.Value)
-	if History.DynamicPointMap[HighestHistoryIndex-1].EntropyDynamic.Value != ed.Value {
-		value = strconv.Itoa(ed.Value - History.DynamicPointMap[HighestHistoryIndex-1].EntropyDynamic.Value)
-	} else {
-		value = "x"
-	}
 
-	return value
+func (d *EntropyDynamic) GetFormattedBytes(basePoint bool) []byte {
+	var valueList []int64
+	base := History.DynamicBasePoint.EntropyDynamic
+	if basePoint {
+		valueList = append(valueList, int64(base.Value))
+	} else {
+		valueList = append(valueList, int64(d.Value)-int64(base.Value))
+	}
+	return helpers.WriteValueList(valueList)
 }

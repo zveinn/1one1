@@ -109,17 +109,17 @@ func (collector *Collector) MaintainControllerCommunications() {
 }
 
 func (collector *Collector) CollectStats() {
+
 	var lastBasePoint time.Time
-	stats.History.DynamicPointMap[stats.HighestHistoryIndex-1] = &stats.DynamicPoint{}
-	stats.History.StaticPointMap[stats.HighestHistoryIndex-1] = &stats.StaticPoint{}
-	stats.FirstTimeCollection()
 	for {
 		var data string
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 		if time.Now().Sub(lastBasePoint).Seconds() > 60 {
 			data = stats.CollectBasePoint()
+			lastBasePoint = time.Now()
+		} else {
+			data = stats.CollectDynamicData()
 		}
-		data = stats.CollectDynamicData()
 
 		for _, controller := range collector.Controllers {
 			if controller.ReadyToReceive {
