@@ -55,12 +55,17 @@ func WriteIntToBuffer(buf *bytes.Buffer, value int64) int {
 	return 8
 
 }
+
 func WriteValueList(valueList []int64, batchTag string) []byte {
 	var buffer bytes.Buffer
 	var data []byte
 	var headers []byte
 	var dataAndHeader []byte
-	if batchTag != "" && len(batchTag) > 255 {
+	var base int64 = 0
+	for _, v := range valueList {
+		base = base + v
+	}
+	if batchTag != "" && len(batchTag) < 255 && base != 0 {
 		headers = append(headers, byte(len(batchTag)))
 		data = append(data, []byte(batchTag)...)
 	}

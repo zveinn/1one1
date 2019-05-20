@@ -149,6 +149,8 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 		ifData := helpers.WriteValueList(valueList, v.Name)
 		mainList = append(mainList, ifData...)
 	}
+	log.Println("FINAL NETWORK RETURN")
+	log.Println(mainList)
 	return mainList
 }
 

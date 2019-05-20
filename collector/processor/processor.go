@@ -117,12 +117,13 @@ func (collector *Collector) CollectStats() {
 		if time.Now().Sub(lastBasePoint).Seconds() > 60 {
 			data = stats.CollectBasePoint()
 			lastBasePoint = time.Now()
+			// stats.ParseDataFromBasePoint(data)
 		} else {
 			data = stats.CollectDynamicData()
+			stats.ParseDataFromDynamicPoint(data)
 		}
 
-		stats.ParseData(data)
-		os.Exit(1)
+		// os.Exit(1)
 		continue
 		for _, controller := range collector.Controllers {
 			if controller.ReadyToReceive {
