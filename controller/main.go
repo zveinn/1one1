@@ -218,7 +218,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		if err != nil {
 			panic(err)
 		}
-		log.Println(data)
+		// log.Println(data)
 		ParseDataPoint(data)
 	}
 

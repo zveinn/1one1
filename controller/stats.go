@@ -11,7 +11,11 @@ func getData(headerValue int, data []byte, valuePointer int) (index, size int, v
 	index, size = findOrderAndSize(headerValue)
 	binaryValue := data[valuePointer+1 : valuePointer+size]
 	postOrNeg := data[valuePointer]
-	if size == 3 {
+
+	if size == 1 {
+		log.Println("back to base !!!")
+		return index, 0, 0
+	} else if size == 3 {
 		value := binary.LittleEndian.Uint16(binaryValue)
 		if postOrNeg == 0 {
 			log.Println("index/size", index, "/", size, "value: ", -value, "  ///  ", data[valuePointer:valuePointer+size])
@@ -87,7 +91,7 @@ func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int)
 }
 func ParseDataPoint(data []byte) {
 	// log.Pri
-	log.Println(data)
+	// log.Println(data)
 	log.Println("length of original:", len(data))
 	var b bytes.Buffer
 	w := zlib.NewWriter(&b)
@@ -107,6 +111,7 @@ func ParseDataPoint(data []byte) {
 	diskEndIndex := parseSection(data, 0)
 	// os.Exit(1)
 	log.Println("MEMORY:")
+	log.Println("disk end index:", diskEndIndex)
 	memoryEndIndex := parseSection(data, diskEndIndex)
 	// memoryEndIndex = 0
 	log.Println("LOAD:")

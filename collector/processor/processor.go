@@ -3,9 +3,9 @@ package processor
 import (
 	"bufio"
 	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -27,8 +27,10 @@ type Collector struct {
 	Controllers        []*Controller
 	mutex              sync.Mutex
 	PointMap           map[int][]byte
+	StaticMap          map[int]string
 	LastBasePointIndex int
 	CurrentPointIndex  int
+	CurrentStaticIndex int
 	MaintainerInterval int
 	ListenerInterval   int
 	CollectionInterval int
@@ -51,6 +53,18 @@ func (c *Collector) AddDataPoint(point []byte) (count int) {
 	c.PointMap[c.CurrentPointIndex] = point
 	c.CurrentPointIndex++
 	return c.CurrentPointIndex
+}
+func (c *Collector) AddStaticPoint(point string) (count int) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	if len(c.StaticMap) > 200000 {
+		c.StaticMap = nil
+		c.StaticMap = make(map[int]string)
+		c.CurrentStaticIndex = 0
+	}
+	c.StaticMap[c.CurrentStaticIndex] = point
+	c.CurrentStaticIndex++
+	return c.CurrentStaticIndex
 }
 
 func (c *Collector) GetIntervalsFromEnvironmentVariables() {
@@ -84,7 +98,7 @@ func (c *Collector) AddController(cont *Controller) {
 }
 func (c *Collector) CleanupOnExit() {
 	for _, controller := range c.Controllers {
-		log.Println("Closing:", controller.Address)
+		helpers.DebugLog("Closing:", controller.Address)
 		if controller.Conn != nil {
 			_ = controller.Conn.Close()
 		}
@@ -127,11 +141,11 @@ func sendFirstBasePoint(collector *Collector, controller *Controller) {
 		panic(err)
 	}
 	newbuffer.Write([]byte{1})
-	log.Println("last base index:", collector.LastBasePointIndex)
-	log.Println(collector.PointMap[collector.LastBasePointIndex])
+	helpers.DebugLog("last base index:", collector.LastBasePointIndex)
+	helpers.DebugLog(collector.PointMap[collector.LastBasePointIndex])
 	newbuffer.Write(data)
 	// newbuffer = append(newbuffer, data)
-	log.Println(newbuffer.Bytes())
+	helpers.DebugLog(newbuffer.Bytes())
 	_, err = newbuffer.WriteTo(controller.Conn)
 	if err != nil {
 		panic(err)
@@ -148,7 +162,7 @@ func (collector *Collector) MaintainControllerCommunications() {
 			if controller.Active {
 				continue
 			}
-			if err := dialAndHandshake(controller, collector.TAG); err != nil {
+			if err := collector.dialAndHandshake(controller, collector.TAG); err != nil {
 				//helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
 				continue
 			}
@@ -160,12 +174,11 @@ func (collector *Collector) MaintainControllerCommunications() {
 }
 
 func (collector *Collector) CollectStats() {
-
 	count := collector.CurrentPointIndex
 	for {
 		var data []byte
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-		if count%5 == 0 {
+		if count%60 == 0 {
 			data = stats.CollectBasePoint()
 			collector.LastBasePointIndex = count
 			count = collector.AddDataPoint(data)
@@ -179,13 +192,19 @@ func (collector *Collector) CollectStats() {
 
 		accumilatedBytes := 0
 		pointCount := 0
+		var allBytes []byte
 		for _, v := range collector.PointMap {
 			accumilatedBytes = accumilatedBytes + len(v)
+			allBytes = append(allBytes, v...)
 			pointCount++
 		}
-		// log.Println(collector.PointMap)
-		log.Println("Accumilated data size in bytes:", accumilatedBytes, " Data point count:", pointCount)
+		var b bytes.Buffer
+		w := zlib.NewWriter(&b)
+		w.Write(allBytes)
+		w.Close()
+		helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
 		// continue
+		// log.Println(data)
 		for _, controller := range collector.Controllers {
 			if controller.ReadyToReceive {
 				controller.Send <- data
@@ -235,29 +254,24 @@ func (c *Controller) Setconnection(conn net.Conn) {
 
 func (c *Controller) OpenSendChannel() {
 	defer func() {
-		log.Println("Closing send loop to controller", c.Address)
+		helpers.DebugLog("Closing send loop to controller", c.Address)
 	}()
 	c.Send = make(chan []byte, 10000)
-
+	newbuffer := new(bytes.Buffer)
 	for {
 		data, errx := <-c.Send
 		if !errx {
 			break
 		}
-		//helpers.DebugLog("sending to controller:", data)
-		// data = append(data, []byte{byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00)}...)
-		// data = append([]byte{byte(len(data))}, data...)
-		// length := len(data)
-		// log.Println(data)
-		newbuffer := new(bytes.Buffer)
+
 		err := binary.Write(newbuffer, binary.LittleEndian, int16(len(data)))
 		if err != nil {
 			panic(err)
 		}
-		newbuffer.Write([]byte{1})
+		newbuffer.Write([]byte{101})
 		newbuffer.Write(data)
 		// newbuffer = append(newbuffer, data)
-		log.Println(newbuffer.Bytes())
+		helpers.DebugLog(newbuffer.Bytes())
 		n, err := newbuffer.WriteTo(c.Conn)
 		newbuffer.Reset()
 		// _, err := c.Conn.Write(newbuffer)
@@ -303,7 +317,7 @@ func dialController(controller *Controller) (err error) {
 	controller.Setconnection(conn)
 	return
 }
-func handShakeWithController(controller *Controller, tag string) (err error) {
+func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
 	// STEP 1
 	// send TAG to controller
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
@@ -323,7 +337,7 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 	// TODO: refactor into NSList global
 	// see readme
 	namespaces := strings.Split(strings.Split(strings.TrimSuffix(message, "\n"), ":")[1], ",")
-	log.Println("NAMESPACES:", namespaces)
+	helpers.DebugLog("NAMESPACES:", namespaces)
 	NS = namespaces
 	controller.HaveNamespacesBeenDelivered(true)
 
@@ -335,16 +349,18 @@ func handShakeWithController(controller *Controller, tag string) (err error) {
 
 	// STEP 8
 	// sending host data
-	_, err = controller.Conn.Write([]byte(stats.GetStaticDataPoint() + "\n"))
+	data := stats.GetStaticBasePoint()
+	_ = c.AddStaticPoint(data)
+	_, err = controller.Conn.Write([]byte(data + "\n"))
 	helpers.PanicX(err)
 	controller.ChangeActiveStatus(true)
 	return
 }
-func dialAndHandshake(controller *Controller, tag string) (err error) {
+func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err error) {
 	if err = dialController(controller); err != nil {
 		return
 	}
-	if err = handShakeWithController(controller, tag); err != nil {
+	if err = c.handShakeWithController(controller, tag); err != nil {
 		return
 	}
 	return
@@ -355,7 +371,7 @@ func ConnectToControllers(controllers string, tag string, collector *Collector) 
 		collector.AddController(controller)
 
 		helpers.DebugLog("Connecting to:", v)
-		if err := dialAndHandshake(controller, tag); err != nil {
+		if err := collector.dialAndHandshake(controller, tag); err != nil {
 			helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
 			continue
 		}

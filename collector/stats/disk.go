@@ -18,13 +18,14 @@ type DiskDynamic struct {
 	INodesTotal    uint64
 	INodesUsed     uint64
 	INodesFree     uint64
+	ValueList      []int64
 }
 
 func collectDiskDynamic(dp *DynamicPoint) {
 	diskStat, err := disk.Usage("/")
 	helpers.PanicX(err)
 
-	dp.DiskDynamic = DiskDynamic{
+	dp.DiskDynamic = &DiskDynamic{
 		//Total:          diskStat.Total,
 		Free:           diskStat.Free,
 		Used:           diskStat.Used,
@@ -34,28 +35,28 @@ func collectDiskDynamic(dp *DynamicPoint) {
 		INodesFree:  diskStat.InodesFree,
 		INodesTotal: diskStat.InodesTotal,
 		INodesUsed:  diskStat.InodesUsed,
+		ValueList:   []int64{},
 	}
 }
 
 func (d *DiskDynamic) GetFormattedBytes(basePoint bool) []byte {
 
-	var valueList []int64
 	base := History.DynamicBasePoint.DiskDynamic
 	if basePoint {
-		valueList = append(valueList, int64(base.Free))
-		valueList = append(valueList, int64(base.Used))
-		valueList = append(valueList, int64(base.INodesTotal))
-		valueList = append(valueList, int64(base.INodesFree))
-		valueList = append(valueList, int64(base.INodesUsed))
-		valueList = append(valueList, int64(base.UsedPercentage))
-	} else {
-		valueList = append(valueList, int64(d.Free)-int64(base.Free))
-		valueList = append(valueList, int64(d.Used)-int64(base.Used))
-		valueList = append(valueList, int64(d.INodesTotal)-int64(base.INodesTotal))
-		valueList = append(valueList, int64(d.INodesFree)-int64(base.INodesFree))
-		valueList = append(valueList, int64(d.INodesUsed)-int64(base.INodesUsed))
-		valueList = append(valueList, int64(d.UsedPercentage)-int64(base.UsedPercentage))
+		base.ValueList = append(base.ValueList, int64(base.Free))
+		base.ValueList = append(base.ValueList, int64(base.Used))
+		base.ValueList = append(base.ValueList, int64(base.INodesTotal))
+		base.ValueList = append(base.ValueList, int64(base.INodesFree))
+		base.ValueList = append(base.ValueList, int64(base.INodesUsed))
+		base.ValueList = append(base.ValueList, int64(base.UsedPercentage))
+		return helpers.WriteValueList(d.ValueList, "")
 	}
-
-	return helpers.WriteValueList(valueList, "")
+	prev := History.DynamicPreviousUpdatePoint.DiskDynamic
+	d.ValueList = append(d.ValueList, int64(d.Free))
+	d.ValueList = append(d.ValueList, int64(d.Used))
+	d.ValueList = append(d.ValueList, int64(d.INodesTotal))
+	d.ValueList = append(d.ValueList, int64(d.INodesFree))
+	d.ValueList = append(d.ValueList, int64(d.INodesUsed))
+	d.ValueList = append(d.ValueList, int64(d.UsedPercentage))
+	return helpers.WriteValueList2(d.ValueList, base.ValueList, prev.ValueList, "")
 }

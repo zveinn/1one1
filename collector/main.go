@@ -20,6 +20,8 @@ func main() {
 	}
 	collector.GetIntervalsFromEnvironmentVariables()
 	defer collector.CleanupOnExit()
+	collector.PointMap = make(map[int][]byte)
+	collector.StaticMap = make(map[int]string)
 
 	stats.InitStats()
 
@@ -32,7 +34,9 @@ func main() {
 	go collector.EngageControllerCommunications()
 	go collector.MaintainControllerCommunications()
 	// Each stats category should be it's own goroutine?
-	collector.PointMap = make(map[int][]byte)
+
+	// missing header means no change
+	// header with a length of 1 means we're back to base.
 	go collector.CollectStats()
 
 	// todo

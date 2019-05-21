@@ -9,12 +9,12 @@ var History *HistoryBuffer
 const HighestHistoryIndex = 2
 
 type DynamicPoint struct {
-	MemoryDynamic
-	LoadDynamic
-	DiskDynamic
-	NetworkDynamic
-	EntropyDynamic
-	CPU string
+	MemoryDynamic  *MemoryDynamic
+	LoadDynamic    *LoadDynamic
+	DiskDynamic    *DiskDynamic
+	NetworkDynamic *NetworkDynamic
+	EntropyDynamic *EntropyDynamic
+	CPU            string
 	//Host      string
 	General   string
 	Load1MIN  float64
@@ -28,37 +28,35 @@ type StaticPoint struct {
 }
 
 type HistoryBuffer struct {
-	StaticPointMap             map[int]*StaticPoint
-	DynamicPointMap            map[int]*DynamicPoint
+	DynamicPreviousUpdatePoint *DynamicPoint
 	DynamicUpdatePoint         *DynamicPoint
-	PreviousDynamicUpdatePoint *DynamicPoint
 	DynamicBasePoint           *DynamicPoint
-	StaticBasePoint            *StaticPoint
+
+	StaticBasePoint   *StaticPoint
+	StaticUpdatePoint *StaticPoint
 }
 
 func InitStats() {
-	History = &HistoryBuffer{
-		DynamicPointMap: make(map[int]*DynamicPoint),
-		StaticPointMap:  make(map[int]*StaticPoint),
-	}
+	History = &HistoryBuffer{}
 }
 func CollectBasePoint() []byte {
-	//var data []byte
 	log.Println("base point !")
 	History.DynamicBasePoint = &DynamicPoint{}
+	History.DynamicPreviousUpdatePoint = &DynamicPoint{}
 	collectDiskDynamic(History.DynamicBasePoint)
 	collectLoad(History.DynamicBasePoint)
 	collectMemory(History.DynamicBasePoint)
 	collectEntropy(History.DynamicBasePoint)
 	collectNetworkDownloadAndUpload(History.DynamicBasePoint)
 	var theBytes []byte
+	// THIS ORDER MATTERS.. DO NOT CHANGE
 	theBytes = append(theBytes, History.DynamicBasePoint.DiskDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.MemoryDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.LoadDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.EntropyDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.NetworkDynamic.GetFormattedBytes(true)...)
+	History.DynamicPreviousUpdatePoint = History.DynamicBasePoint
 	return theBytes
-
 }
 
 func CollectDynamicData() []byte {
@@ -69,31 +67,33 @@ func CollectDynamicData() []byte {
 	collectEntropy(History.DynamicUpdatePoint)
 	collectNetworkDownloadAndUpload(History.DynamicUpdatePoint)
 	var theBytes []byte
+	// THIS ORDER MATTERS.. DO NOT CHANGE!
 	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.MemoryDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.EntropyDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.NetworkDynamic.GetFormattedBytes(false)...)
-	// History.PreviousDynamicUpdatePoint = History.DynamicUpdatePoint
+	History.DynamicPreviousUpdatePoint = History.DynamicUpdatePoint
 	return theBytes
+}
+func GetStaticBasePoint() string {
+	History.StaticBasePoint = &StaticPoint{}
+	collectNetworkInterfaces(History.StaticBasePoint)
+	collectStaticHostData(History.StaticBasePoint)
+	var data string
+	data = data + History.StaticBasePoint.HostStatic.GetFormattedString() + ";"
+	data = data + getFormattedStringForInterfaces(History.StaticBasePoint.NetworkStatic) + ";"
+	log.Println(data)
+	return data
 }
 
 func GetStaticDataPoint() string {
-
-	if History.StaticPointMap[HighestHistoryIndex] != nil {
-		History.StaticPointMap[HighestHistoryIndex-1] = History.StaticPointMap[HighestHistoryIndex]
-		//helpers.DebugLog("second index", History.DynamicPointMap[HighestHistoryIndex-1])
-	} else {
-		History.StaticPointMap[HighestHistoryIndex-1] = &StaticPoint{}
-	}
-
-	History.StaticPointMap[HighestHistoryIndex] = &StaticPoint{}
-
-	collectNetworkInterfaces(History.StaticPointMap[HighestHistoryIndex])
-	collectStaticHostData(History.StaticPointMap[HighestHistoryIndex])
+	History.StaticUpdatePoint = &StaticPoint{}
+	collectNetworkInterfaces(History.StaticUpdatePoint)
+	collectStaticHostData(History.StaticUpdatePoint)
 	var data string
-	data = data + History.StaticPointMap[HighestHistoryIndex].HostStatic.GetFormattedString() + ";"
-	data = data + getFormattedStringForInterfaces(History.StaticPointMap[HighestHistoryIndex].NetworkStatic) + ";"
+	data = data + History.StaticUpdatePoint.HostStatic.GetFormattedString() + ";"
+	data = data + getFormattedStringForInterfaces(History.StaticUpdatePoint.NetworkStatic) + ";"
 	log.Println(data)
 	return data
 }

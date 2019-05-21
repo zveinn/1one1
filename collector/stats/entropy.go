@@ -10,7 +10,8 @@ import (
 )
 
 type EntropyDynamic struct {
-	Value int
+	Value     int
+	ValueList []int64
 }
 
 func collectEntropy(dp *DynamicPoint) {
@@ -20,16 +21,16 @@ func collectEntropy(dp *DynamicPoint) {
 	}
 	entInt, err := strconv.Atoi(strings.TrimSuffix(string(file), "\n"))
 	helpers.PanicX(err)
-	dp.EntropyDynamic = EntropyDynamic{Value: entInt}
+	dp.EntropyDynamic = &EntropyDynamic{Value: entInt}
 }
 
 func (d *EntropyDynamic) GetFormattedBytes(basePoint bool) []byte {
-	var valueList []int64
 	base := History.DynamicBasePoint.EntropyDynamic
 	if basePoint {
-		valueList = append(valueList, int64(base.Value))
-	} else {
-		valueList = append(valueList, int64(d.Value)-int64(base.Value))
+		base.ValueList = append(base.ValueList, int64(base.Value))
+		return helpers.WriteValueList(base.ValueList, "")
 	}
-	return helpers.WriteValueList(valueList, "")
+	prev := History.DynamicPreviousUpdatePoint.EntropyDynamic
+	d.ValueList = append(d.ValueList, int64(d.Value))
+	return helpers.WriteValueList2(d.ValueList, base.ValueList, prev.ValueList, "")
 }

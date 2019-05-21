@@ -19,6 +19,7 @@ type MemoryDynamic struct {
 	Available  uint64
 	SwapCached uint64
 	Percentage float64
+	ValueList  []int64
 }
 
 func collectMemory(dp *DynamicPoint) {
@@ -38,32 +39,33 @@ func collectMemory(dp *DynamicPoint) {
 	memoryDynamicPoint.Percentage = float64(vmStat.Used) / float64(vmStat.Total)
 
 	//log.Println(memoryDynamicPoint)
-	dp.MemoryDynamic = memoryDynamicPoint
+	dp.MemoryDynamic = &memoryDynamicPoint
 }
 
 func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
-
-	var valueList []int64
-	base := History.DynamicBasePoint.MemoryDynamic
 	if basePoint {
-		valueList = append(valueList, int64(base.Free))
-		valueList = append(valueList, int64(base.Used))
-		valueList = append(valueList, int64(base.Available))
-		valueList = append(valueList, int64(base.Shared))
-		valueList = append(valueList, int64(base.Buffers))
-		valueList = append(valueList, int64(base.SwapFree))
-		valueList = append(valueList, int64(base.SwapCached))
-		valueList = append(valueList, int64(base.Percentage))
-	} else {
-		valueList = append(valueList, int64(d.Free)-int64(base.Free))
-		valueList = append(valueList, int64(d.Used)-int64(base.Used))
-		valueList = append(valueList, int64(d.Available)-int64(base.Available))
-		valueList = append(valueList, int64(d.Shared)-int64(base.Shared))
-		valueList = append(valueList, int64(d.Buffers)-int64(base.Buffers))
-		valueList = append(valueList, int64(d.SwapFree)-int64(base.SwapFree))
-		valueList = append(valueList, int64(d.SwapCached)-int64(base.SwapCached))
-		valueList = append(valueList, int64(d.Percentage)-int64(base.Percentage))
+		base := History.DynamicBasePoint.MemoryDynamic
+		base.ValueList = append(base.ValueList, int64(base.Free))
+		base.ValueList = append(base.ValueList, int64(base.Used))
+		base.ValueList = append(base.ValueList, int64(base.Available))
+		base.ValueList = append(base.ValueList, int64(base.Shared))
+		base.ValueList = append(base.ValueList, int64(base.Buffers))
+		base.ValueList = append(base.ValueList, int64(base.SwapFree))
+		base.ValueList = append(base.ValueList, int64(base.SwapCached))
+		base.ValueList = append(base.ValueList, int64(base.Percentage))
+		return helpers.WriteValueList(d.ValueList, "")
 	}
 
-	return helpers.WriteValueList(valueList, "")
+	base := History.DynamicBasePoint.MemoryDynamic
+	prev := History.DynamicPreviousUpdatePoint.MemoryDynamic
+	d.ValueList = append(d.ValueList, int64(d.Free))
+	d.ValueList = append(d.ValueList, int64(d.Used))
+	d.ValueList = append(d.ValueList, int64(d.Available))
+	d.ValueList = append(d.ValueList, int64(d.Shared))
+	d.ValueList = append(d.ValueList, int64(d.Buffers))
+	d.ValueList = append(d.ValueList, int64(d.SwapFree))
+	d.ValueList = append(d.ValueList, int64(d.SwapCached))
+	d.ValueList = append(d.ValueList, int64(d.Percentage))
+	return helpers.WriteValueList2(d.ValueList, base.ValueList, prev.ValueList, "")
+
 }

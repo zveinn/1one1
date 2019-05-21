@@ -32,13 +32,15 @@ type OUT struct {
 	Multicast  float64
 }
 type NetworkInterface struct {
-	Name string
-	IN   *IN
-	OUT  *OUT
+	Name      string
+	IN        *IN
+	OUT       *OUT
+	ValueList []int64
 }
 
 type NetworkDynamic struct {
 	Interfaces map[string]*NetworkInterface
+	ValueList  []int64
 }
 
 type NetworkStatic struct {
@@ -103,20 +105,21 @@ func getFormattedStringForInterfaces(nsl map[string]*NetworkStatic) string {
 
 func collectNetworkDownloadAndUpload(dp *DynamicPoint) {
 	networkInterfaces := getAllInterfacesDownloadAndUploadStats()
-	dp.NetworkDynamic = NetworkDynamic{Interfaces: networkInterfaces}
+	dp.NetworkDynamic = &NetworkDynamic{Interfaces: networkInterfaces}
 }
 func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 
 	var mainList []byte
 
-	base := History.DynamicBasePoint.NetworkDynamic
+	// base := History.DynamicBasePoint.NetworkDynamic
 	// prev := History.PreviousDynamicUpdatePoint
 	mainList = append(mainList, byte(len(d.Interfaces)))
 	// changeCount := 0
-	for i, v := range d.Interfaces {
+	for _, v := range d.Interfaces {
 		var valueList []int64
 		// valueList = append(valueList, []byte(v.Name)...)
 		if basePoint {
+			base := History.DynamicBasePoint.NetworkDynamic.Interfaces[v.Name]
 			valueList = append(valueList, int64(v.IN.Bytes))
 			valueList = append(valueList, int64(v.IN.Packets))
 			valueList = append(valueList, int64(v.IN.Errors))
@@ -131,24 +134,30 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 			valueList = append(valueList, int64(v.OUT.Frame))
 			valueList = append(valueList, int64(v.OUT.Compressed))
 			valueList = append(valueList, int64(v.OUT.Multicast))
+			ifData := helpers.WriteValueList(valueList, v.Name)
+			mainList = append(mainList, ifData...)
+			base.ValueList = valueList
 		} else {
-			valueList = append(valueList, int64(v.IN.Bytes)-int64(base.Interfaces[i].IN.Bytes))
-			valueList = append(valueList, int64(v.IN.Packets)-int64(base.Interfaces[i].IN.Packets))
-			valueList = append(valueList, int64(v.IN.Errors)-int64(base.Interfaces[i].IN.Errors))
-			valueList = append(valueList, int64(v.IN.Dropped)-int64(base.Interfaces[i].IN.Dropped))
-			valueList = append(valueList, int64(v.IN.Frame)-int64(base.Interfaces[i].IN.Frame))
-			valueList = append(valueList, int64(v.IN.Compressed)-int64(base.Interfaces[i].IN.Compressed))
-			valueList = append(valueList, int64(v.IN.Multicast)-int64(base.Interfaces[i].IN.Multicast))
-			valueList = append(valueList, int64(v.OUT.Bytes)-int64(base.Interfaces[i].OUT.Bytes))
-			valueList = append(valueList, int64(v.OUT.Packets)-int64(base.Interfaces[i].OUT.Packets))
-			valueList = append(valueList, int64(v.OUT.Errors)-int64(base.Interfaces[i].OUT.Errors))
-			valueList = append(valueList, int64(v.OUT.Dropped)-int64(base.Interfaces[i].OUT.Dropped))
-			valueList = append(valueList, int64(v.OUT.Frame)-int64(base.Interfaces[i].OUT.Frame))
-			valueList = append(valueList, int64(v.OUT.Compressed)-int64(base.Interfaces[i].OUT.Compressed))
-			valueList = append(valueList, int64(v.OUT.Multicast)-int64(base.Interfaces[i].OUT.Multicast))
+			prev := History.DynamicPreviousUpdatePoint.NetworkDynamic.Interfaces[v.Name]
+			base := History.DynamicPreviousUpdatePoint.NetworkDynamic.Interfaces[v.Name]
+			v.ValueList = append(v.ValueList, int64(v.IN.Bytes))
+			v.ValueList = append(v.ValueList, int64(v.IN.Packets))
+			v.ValueList = append(v.ValueList, int64(v.IN.Errors))
+			v.ValueList = append(v.ValueList, int64(v.IN.Dropped))
+			v.ValueList = append(v.ValueList, int64(v.IN.Frame))
+			v.ValueList = append(v.ValueList, int64(v.IN.Compressed))
+			v.ValueList = append(v.ValueList, int64(v.IN.Multicast))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Bytes))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Packets))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Errors))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Dropped))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Frame))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Compressed))
+			v.ValueList = append(v.ValueList, int64(v.OUT.Multicast))
+			ifData := helpers.WriteValueList2(v.ValueList, base.ValueList, prev.ValueList, v.Name)
+			mainList = append(mainList, ifData...)
+
 		}
-		ifData := helpers.WriteValueList(valueList, v.Name)
-		mainList = append(mainList, ifData...)
 	}
 	// log.Println("FINAL NETWORK RETURN")
 	// log.Println(mainList)

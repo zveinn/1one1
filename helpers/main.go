@@ -56,12 +56,71 @@ func WriteIntToBuffer(buf *bytes.Buffer, value int64) int {
 
 }
 
+func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag string) []byte {
+	var buffer bytes.Buffer
+	var data []byte
+	var headers []byte
+	var dataAndHeader []byte
+	var base int64 = 0
+	// log.Println(baseValueList)
+	// log.Println(valueList)
+	for _, v := range valueList {
+		base = base + v
+	}
+	if batchTag != "" && len(batchTag) < 255 && base != 0 {
+		headers = append(headers, byte(len(batchTag)))
+		data = append(data, []byte(batchTag)...)
+	}
+	// log.Println("value list", valueList, "batch tag:", batchTag)
+	for i, v := range valueList {
+
+		var length int
+		// if there is no change from the base value list we don't need to
+		// send any data, just a control byte indicator
+		if v == 0 {
+			continue
+		} else if v == baseValueList[i] {
+			length = 1
+		} else if v == preValueList[i] {
+			continue
+		} else {
+
+			length = WriteIntToBuffer(&buffer, v-baseValueList[i])
+			length = length + 1
+			if v < 0 {
+				data = append(data, byte(0))
+			} else {
+				data = append(data, byte(1))
+			}
+		}
+
+		final, err := strconv.Atoi(strconv.Itoa(i) + strconv.Itoa(length))
+		if err != nil {
+			panic(err)
+		}
+		headers = append(headers, byte(final))
+		if length != 1 {
+			data = append(data, buffer.Bytes()...)
+		}
+
+		buffer.Reset()
+	}
+	dataAndHeader = append(dataAndHeader, byte(len(headers)))
+	dataAndHeader = append(dataAndHeader, headers...)
+	dataAndHeader = append(dataAndHeader, data...)
+	log.Println(baseValueList)
+	log.Println(valueList)
+	log.Println(batchTag)
+	// log.Println("formatted bytes", dataAndHeader)
+	return dataAndHeader
+}
 func WriteValueList(valueList []int64, batchTag string) []byte {
 	var buffer bytes.Buffer
 	var data []byte
 	var headers []byte
 	var dataAndHeader []byte
 	var base int64 = 0
+	// log.Println(valueList)
 	for _, v := range valueList {
 		base = base + v
 	}
