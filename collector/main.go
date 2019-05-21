@@ -32,8 +32,9 @@ func main() {
 	go collector.EngageControllerCommunications()
 	go collector.MaintainControllerCommunications()
 	// Each stats category should be it's own goroutine?
+	collector.PointMap = make(map[int][]byte)
 	go collector.CollectStats()
-	
+
 	// todo
 	// go collector.SendStats()
 

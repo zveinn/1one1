@@ -2,6 +2,8 @@ package processor
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"log"
 	"net"
@@ -19,14 +21,36 @@ var NS []string
 var NSList map[string]int
 
 type Collector struct {
-	Buffer             chan string
+	Buffer             chan []byte
 	RecoveryFile       string
 	TAG                string
 	Controllers        []*Controller
 	mutex              sync.Mutex
+	PointMap           map[int][]byte
+	LastBasePointIndex int
+	CurrentPointIndex  int
 	MaintainerInterval int
 	ListenerInterval   int
 	CollectionInterval int
+	mux                sync.Mutex
+}
+
+// 60 * 60 = 3600 data points = 1 hour
+// x 48 = 172.800 = 2 days ( 48 hours )
+// asuming each data point is 200 bytes
+// we need 34.560.000 or 34,56MB of memory to store
+// 48 hours worth of stats.
+func (c *Collector) AddDataPoint(point []byte) (count int) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	if len(c.PointMap) > 200000 {
+		c.PointMap = nil
+		c.PointMap = make(map[int][]byte)
+		c.CurrentPointIndex = 0
+	}
+	c.PointMap[c.CurrentPointIndex] = point
+	c.CurrentPointIndex++
+	return c.CurrentPointIndex
 }
 
 func (c *Collector) GetIntervalsFromEnvironmentVariables() {
@@ -84,10 +108,37 @@ func (collector *Collector) EngageControllerCommunications() {
 			helpers.PanicX(err)
 			controller.ChangeListenerStatus(true)
 			controller.ChangeReceivingStatus(true)
+			// send the first base point
+			sendFirstBasePoint(collector, controller)
 		}
 	}
-
 }
+func sendFirstBasePoint(collector *Collector, controller *Controller) {
+	var data []byte
+	if len(collector.PointMap) > 0 {
+		data = collector.PointMap[collector.LastBasePointIndex]
+	} else {
+		data = stats.CollectBasePoint()
+		_ = collector.AddDataPoint(data)
+	}
+	newbuffer := new(bytes.Buffer)
+	err := binary.Write(newbuffer, binary.LittleEndian, int16(len(data)))
+	if err != nil {
+		panic(err)
+	}
+	newbuffer.Write([]byte{1})
+	log.Println("last base index:", collector.LastBasePointIndex)
+	log.Println(collector.PointMap[collector.LastBasePointIndex])
+	newbuffer.Write(data)
+	// newbuffer = append(newbuffer, data)
+	log.Println(newbuffer.Bytes())
+	_, err = newbuffer.WriteTo(controller.Conn)
+	if err != nil {
+		panic(err)
+	}
+	newbuffer.Reset()
+}
+
 func (collector *Collector) MaintainControllerCommunications() {
 	for {
 		// TODO: implement rand int sleeper
@@ -110,24 +161,34 @@ func (collector *Collector) MaintainControllerCommunications() {
 
 func (collector *Collector) CollectStats() {
 
-	var lastBasePoint time.Time
+	count := collector.CurrentPointIndex
 	for {
 		var data []byte
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-		if time.Now().Sub(lastBasePoint).Seconds() > 60 {
+		if count%5 == 0 {
 			data = stats.CollectBasePoint()
-			lastBasePoint = time.Now()
-			// stats.ParseDataFromBasePoint(data)
+			collector.LastBasePointIndex = count
+			count = collector.AddDataPoint(data)
+			// stats.ParseDataPoint(data)
 		} else {
 			data = stats.CollectDynamicData()
-			stats.ParseDataFromDynamicPoint(data)
+			count = collector.AddDataPoint(data)
+			// stats.ParseDataPoint(data)
+			// stats.ParseDataFromDynamicPoint(data)
 		}
 
-		// os.Exit(1)
-		continue
+		accumilatedBytes := 0
+		pointCount := 0
+		for _, v := range collector.PointMap {
+			accumilatedBytes = accumilatedBytes + len(v)
+			pointCount++
+		}
+		// log.Println(collector.PointMap)
+		log.Println("Accumilated data size in bytes:", accumilatedBytes, " Data point count:", pointCount)
+		// continue
 		for _, controller := range collector.Controllers {
 			if controller.ReadyToReceive {
-				// controller.Send <- data + "\n"
+				controller.Send <- data
 			}
 		}
 	}
@@ -142,7 +203,7 @@ type Controller struct {
 	Conn           net.Conn
 	Retry          int
 	mutex          sync.Mutex
-	Send           chan string
+	Send           chan []byte
 	//InactiveSince time.Time
 }
 
@@ -176,16 +237,32 @@ func (c *Controller) OpenSendChannel() {
 	defer func() {
 		log.Println("Closing send loop to controller", c.Address)
 	}()
-	c.Send = make(chan string, 10000)
+	c.Send = make(chan []byte, 10000)
+
 	for {
 		data, errx := <-c.Send
 		if !errx {
 			break
 		}
 		//helpers.DebugLog("sending to controller:", data)
-		_, err := c.Conn.Write([]byte(data))
+		// data = append(data, []byte{byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00), byte(0x00)}...)
+		// data = append([]byte{byte(len(data))}, data...)
+		// length := len(data)
+		// log.Println(data)
+		newbuffer := new(bytes.Buffer)
+		err := binary.Write(newbuffer, binary.LittleEndian, int16(len(data)))
 		if err != nil {
-			helpers.DebugLog("ERROR WHEN WRITING STATS:", err)
+			panic(err)
+		}
+		newbuffer.Write([]byte{1})
+		newbuffer.Write(data)
+		// newbuffer = append(newbuffer, data)
+		log.Println(newbuffer.Bytes())
+		n, err := newbuffer.WriteTo(c.Conn)
+		newbuffer.Reset()
+		// _, err := c.Conn.Write(newbuffer)
+		if err != nil {
+			helpers.DebugLog("ERROR WHEN WRITING STATS (Count", n, ") err:", err)
 			close(c.Send)
 			break
 		}

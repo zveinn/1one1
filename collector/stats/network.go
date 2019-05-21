@@ -110,6 +110,7 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 	var mainList []byte
 
 	base := History.DynamicBasePoint.NetworkDynamic
+	// prev := History.PreviousDynamicUpdatePoint
 	mainList = append(mainList, byte(len(d.Interfaces)))
 	// changeCount := 0
 	for i, v := range d.Interfaces {
@@ -149,8 +150,8 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 		ifData := helpers.WriteValueList(valueList, v.Name)
 		mainList = append(mainList, ifData...)
 	}
-	log.Println("FINAL NETWORK RETURN")
-	log.Println(mainList)
+	// log.Println("FINAL NETWORK RETURN")
+	// log.Println(mainList)
 	return mainList
 }
 

@@ -3,13 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"log"
 	"math/rand"
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -202,24 +202,65 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	readFromConnectionOriginal(collector, controller)
 }
 func readFromConnectionOriginal(collector *Collector, controller *Controller) {
+	reader := bufio.NewReader(collector.Conn)
 	for {
-		message, err := bufio.NewReader(collector.Conn).ReadString('\n')
+		controlBytes := make([]byte, 3)
+		_, err := reader.Read(controlBytes)
 		if err != nil {
-			// TODO: handle better
-			helpers.DebugLog("ERROR IN READ LOOP:", err)
-			err = collector.Conn.Close()
-			if err != nil {
-				// TODO: handle better
-				helpers.DebugLog("ERROR CLOSING INSIDE READ LOOP:", err)
-				break
-			}
+			panic(err)
 		}
-		helpers.DebugLog("Length of message:", strconv.Itoa(len(message)))
-		go controller.parseIncomingData(collector.TAG + ":::" + message)
-		//TODO: IMPLEMENT SQLITE
-		//helpers.DebugLog("IN:", string(message))
-
+		// log.Println(lengthByte)
+		length := binary.LittleEndian.Uint16(controlBytes[0:3])
+		log.Println("Length:", length)
+		log.Println("control byte:", controlBytes[2])
+		data := make([]byte, length)
+		_, err = reader.Read(data)
+		if err != nil {
+			panic(err)
+		}
+		log.Println(data)
+		ParseDataPoint(data)
 	}
+
+	// scanner := bufio.NewScanner(collector.Conn)
+	// split := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	// 	index := bytes.Index(data, []byte{0, 0, 0, 0, 0, 0, 0, 0})
+	// 	log.Println(index)
+	// 	if index != -1 {
+	// 		return index + 8, data[:index], nil
+	// 	}
+	// 	if atEOF {
+	// 		return 0, nil, io.EOF
+	// 	}
+	// 	return 0, nil, nil
+	// }
+	// scanner.Split(split)
+	// for scanner.Scan() {
+	// 	log.Println(scanner.Bytes())
+	// }
+
+	// if scanner.Err() != nil {
+	// 	log.Println(scanner.Err())
+	// }
+
+	// for {
+	// 	message, err := bufio.NewReader(collector.Conn).ReadString('\n')
+	// 	if err != nil {
+	// 		// TODO: handle better
+	// 		helpers.DebugLog("ERROR IN READ LOOP:", err)
+	// 		err = collector.Conn.Close()
+	// 		if err != nil {
+	// 			// TODO: handle better
+	// 			helpers.DebugLog("ERROR CLOSING INSIDE READ LOOP:", err)
+	// 			break
+	// 		}
+	// 	}
+	// 	helpers.DebugLog("Length of message:", strconv.Itoa(len(message)))
+	// 	go controller.parseIncomingData(collector.TAG + ":::" + message)
+	// 	//TODO: IMPLEMENT SQLITE
+	// 	//helpers.DebugLog("IN:", string(message))
+
+	// }
 }
 
 func (c *Controller) sendToAllUis(msg string) {
