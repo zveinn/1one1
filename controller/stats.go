@@ -7,43 +7,50 @@ import (
 	"log"
 )
 
-func getData(headerValue int, data []byte, valuePointer int) (index, size int, value interface{}) {
+func getData(headerValue int, data []byte, valuePointer int) (index, size int, value int64) {
 	index, size = findOrderAndSize(headerValue)
+	// log.Println("size/index", size, index)
 	binaryValue := data[valuePointer+1 : valuePointer+size]
 	postOrNeg := data[valuePointer]
 
 	if size == 1 {
-		log.Println("back to base !!!")
+		// log.Print("BB")
 		return index, 0, 0
 	} else if size == 3 {
 		value := binary.LittleEndian.Uint16(binaryValue)
 		if postOrNeg == 0 {
-			log.Println("index/size", index, "/", size, "value: ", -value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(-value)
+			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
 		} else {
-			log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(value)
+			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
 
 	} else if size == 5 {
 		value := binary.LittleEndian.Uint32(binaryValue)
 		if postOrNeg == 0 {
-			log.Println("index/size", index, "/", size, "value: ", -value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(-value)
+			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
 		} else {
-			log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(value)
+			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
 
 	} else if size == 9 {
 		value := binary.LittleEndian.Uint64(binaryValue)
 		if postOrNeg == 0 {
-			log.Println("index/size", index, "/", size, "value: ", -value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(-value)
+			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
 		} else {
-			log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
+			return index, size, int64(value)
+			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
 
 	} else {
 		log.Println("Whooops!")
 		value = 0
 	}
-	return
+	return index, size, int64(value)
 }
 func parseSection(data []byte, previousEndingIndex int) (endIndex int) {
 	if data[previousEndingIndex] == 0 {
@@ -53,7 +60,8 @@ func parseSection(data []byte, previousEndingIndex int) (endIndex int) {
 	currentValueIndex := previousEndingIndex + int(data[previousEndingIndex]) + 1
 	headerLength := int(data[previousEndingIndex])
 	for i := 1; i <= headerLength; i++ {
-		_, size, _ := getData(int(data[previousEndingIndex+i]), data, currentValueIndex)
+		index, size, value := getData(int(data[previousEndingIndex+i]), data, currentValueIndex)
+		log.Println("index/size", index, "/", size, "value: ", value)
 		currentValueIndex = currentValueIndex + size
 		endIndex = currentValueIndex
 	}
@@ -75,12 +83,12 @@ func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int)
 
 			if ii == 1 {
 				value := string(data[currentPointer : currentPointer+int(data[currentHeaderPointer])])
-
 				log.Println("INTERFACE:", value, "  ///  ", data[currentPointer:currentPointer+int(data[currentHeaderPointer])])
 				currentPointer = currentPointer + int(data[currentHeaderPointer])
 				currentHeaderPointer++
 			} else {
-				_, size, _ := getData(int(data[currentHeaderPointer]), data, currentPointer)
+				index, size, value := getData(int(data[currentHeaderPointer]), data, currentPointer)
+				log.Println("index/size", index, "/", size, "value: ", value)
 				currentPointer = currentPointer + size
 				currentHeaderPointer++
 			}
@@ -111,7 +119,7 @@ func ParseDataPoint(data []byte) {
 	diskEndIndex := parseSection(data, 0)
 	// os.Exit(1)
 	log.Println("MEMORY:")
-	log.Println("disk end index:", diskEndIndex)
+	// log.Println("disk end index:", diskEndIndex)
 	memoryEndIndex := parseSection(data, diskEndIndex)
 	// memoryEndIndex = 0
 	log.Println("LOAD:")

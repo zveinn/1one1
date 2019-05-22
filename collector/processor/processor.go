@@ -140,7 +140,12 @@ func sendFirstBasePoint(collector *Collector, controller *Controller) {
 	if err != nil {
 		panic(err)
 	}
-	newbuffer.Write([]byte{1})
+	newbuffer.Write([]byte{101})
+	timestamp := time.Now().UnixNano()
+	err = binary.Write(newbuffer, binary.LittleEndian, int64(timestamp))
+	if err != nil {
+		panic(err)
+	}
 	helpers.DebugLog("last base index:", collector.LastBasePointIndex)
 	helpers.DebugLog(collector.PointMap[collector.LastBasePointIndex])
 	newbuffer.Write(data)
@@ -182,12 +187,9 @@ func (collector *Collector) CollectStats() {
 			data = stats.CollectBasePoint()
 			collector.LastBasePointIndex = count
 			count = collector.AddDataPoint(data)
-			// stats.ParseDataPoint(data)
 		} else {
 			data = stats.CollectDynamicData()
 			count = collector.AddDataPoint(data)
-			// stats.ParseDataPoint(data)
-			// stats.ParseDataFromDynamicPoint(data)
 		}
 
 		accumilatedBytes := 0
@@ -268,10 +270,17 @@ func (c *Controller) OpenSendChannel() {
 		if err != nil {
 			panic(err)
 		}
-		newbuffer.Write([]byte{101})
+		newbuffer.Write([]byte{102})
+		timestamp := time.Now().UnixNano()
+		err = binary.Write(newbuffer, binary.LittleEndian, int64(timestamp))
+		if err != nil {
+			panic(err)
+		}
+
 		newbuffer.Write(data)
+
 		// newbuffer = append(newbuffer, data)
-		helpers.DebugLog(newbuffer.Bytes())
+		// helpers.DebugLog(newbuffer.Bytes())
 		n, err := newbuffer.WriteTo(c.Conn)
 		newbuffer.Reset()
 		// _, err := c.Conn.Write(newbuffer)

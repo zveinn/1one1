@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,11 +26,15 @@ func main() {
 		IP:                   os.Getenv("IP"),
 		PORT:                 os.Getenv("PORT"),
 		Collectors:           make(map[string]*Collector),
-		Buffer:               make(chan string, 10000),
+		Buffer:               make(chan *DataPoint, 10000),
 		BufferDirectoryPath:  "./buffers/",
 		MinLinesInBufferFile: 10,
+		CollectionBuffer:     make(map[string][]*DataPoint),
 	}
 
+	LiveBuffer = &Collection{
+		Map: make(map[string]map[string]map[string][][]byte),
+	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
 	controller.start()
@@ -53,7 +57,7 @@ type Stat struct {
 }
 
 type Controller struct {
-	Buffer chan string
+	Buffer chan *DataPoint
 	// Recovery in sqlite?
 	//RecoveryFile string
 	BufferDirectoryPath  string
@@ -63,7 +67,16 @@ type Controller struct {
 	UIs                  map[string]*UI
 	mutex                sync.Mutex
 	MinLinesInBufferFile int
+	CollectionBuffer     map[string][]*DataPoint
+	mux                  sync.Mutex
 }
+type Collection struct {
+	// instace,namespace,[year.month.day.hour.minute.second],[]byte
+	Map map[string]map[string]map[string][][]byte
+	Mux sync.Mutex
+}
+
+var LiveBuffer *Collection
 
 // mat zoe? abive and beyond
 func (c *Controller) CleanupOnExit() {
@@ -213,54 +226,20 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		length := binary.LittleEndian.Uint16(controlBytes[0:3])
 		log.Println("Length:", length)
 		log.Println("control byte:", controlBytes[2])
+		// timestamp := binary.LittleEndian.Uint64(controlBytes[3:])
+
+		// log.Println("timestamp", timestamp, "MS:", (timestamp / 1000000), controlBytes[3:])
 		data := make([]byte, length)
 		_, err = reader.Read(data)
 		if err != nil {
 			panic(err)
 		}
 		// log.Println(data)
-		ParseDataPoint(data)
+		// ParseDataPoint(data)
+
+		go controller.parseIncomingData(collector.TAG, data, int(controlBytes[2]))
 	}
 
-	// scanner := bufio.NewScanner(collector.Conn)
-	// split := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	// 	index := bytes.Index(data, []byte{0, 0, 0, 0, 0, 0, 0, 0})
-	// 	log.Println(index)
-	// 	if index != -1 {
-	// 		return index + 8, data[:index], nil
-	// 	}
-	// 	if atEOF {
-	// 		return 0, nil, io.EOF
-	// 	}
-	// 	return 0, nil, nil
-	// }
-	// scanner.Split(split)
-	// for scanner.Scan() {
-	// 	log.Println(scanner.Bytes())
-	// }
-
-	// if scanner.Err() != nil {
-	// 	log.Println(scanner.Err())
-	// }
-
-	// for {
-	// 	message, err := bufio.NewReader(collector.Conn).ReadString('\n')
-	// 	if err != nil {
-	// 		// TODO: handle better
-	// 		helpers.DebugLog("ERROR IN READ LOOP:", err)
-	// 		err = collector.Conn.Close()
-	// 		if err != nil {
-	// 			// TODO: handle better
-	// 			helpers.DebugLog("ERROR CLOSING INSIDE READ LOOP:", err)
-	// 			break
-	// 		}
-	// 	}
-	// 	helpers.DebugLog("Length of message:", strconv.Itoa(len(message)))
-	// 	go controller.parseIncomingData(collector.TAG + ":::" + message)
-	// 	//TODO: IMPLEMENT SQLITE
-	// 	//helpers.DebugLog("IN:", string(message))
-
-	// }
 }
 
 func (c *Controller) sendToAllUis(msg string) {
@@ -268,58 +247,103 @@ func (c *Controller) sendToAllUis(msg string) {
 		ui.SendChannel <- msg
 	}
 }
-func (c *Controller) parseIncomingData(msg string) {
-	msg = strings.TrimSuffix(msg, "\n")
+
+type DataPoint struct {
+	Value       []byte
+	Tag         string
+	Timestamp   int64
+	ControlByte int
+}
+
+func (c *Controller) parseIncomingData(tag string, data []byte, controlByte int) {
 
 	//helpers.DebugLog("DATA:", msg)
-	c.Buffer <- msg
+	c.Buffer <- &DataPoint{
+		Value:       data,
+		Tag:         tag,
+		ControlByte: controlByte,
+	}
 }
+
 func (c *Controller) EngageBufferPipe() {
 
-	var buffer bytes.Buffer
 	// TODO: grow properly, we are writing strings.. but the buffer grows in bytes
 	//	buffer.Grow(c.MinLinesInBufferFile * 500)
-	count := 0
+	// size := 0
 	for {
 		if len(c.Buffer) > 100 {
 			//buffer.Grow(buffer.Len() * 2)
 			helpers.DebugLog("chan length", len(c.Buffer))
 		}
 
-		message := <-c.Buffer
-		//helpers.DebugLog("CONTROLLER BUFFER RECEIVED:", message)
+		dp := <-c.Buffer
+		// CollectionBuffer.mux.Lock()
+		// c.CollectionBuffer[dp.Tag] = append(c.CollectionBuffer[dp.Tag], dp)
+		// CollectionBuffer.mux.Unlock()
+		c.ParseDataPointIntoMemoryMap(dp)
+		// log.Println(c.CollectionBuffer)
+		// size = size + len(dp.Value)
+		// if size > 3000 {
+		// 	// write data
+		// 	// go c.WriteBufferToFile()
+		// }
 
-		go c.sendToAllUis(message)
-		_, err := buffer.WriteString(message)
+	}
+}
+func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 
-		//helpers.DebugLog("wrote", data)
-		if err != nil {
-			helpers.DebugLog(err)
-			break
-		}
+	// timestamp := dp.Timestamp.Unix()
+	// tag := dp.Tag
+	log.Println(dp.Value)
+	timestamp := binary.LittleEndian.Uint64(dp.Value[:8])
+	log.Println("data starting sequence:", dp.Value[8:20])
+	log.Println("timestamp", timestamp, "MS:", (timestamp / 1000000), dp.Value[:8])
 
-		count++
-		//helpers.DebugLog(count)
-		if count > c.MinLinesInBufferFile && count >= len(c.Collectors)-1 {
-			go c.WriteBufferToFile(buffer)
-			buffer.Reset()
-			count = 0
+	ParseDataPoint(dp.Value[8:])
+	timeTag := strconv.FormatInt(dp.Timestamp, 10)
+	// for _, v := range dp.Value {
+	if LiveBuffer.Map[dp.Tag] == nil {
+		LiveBuffer.Map[dp.Tag] = make(map[string]map[string][][]byte)
+	}
+	if LiveBuffer.Map[dp.Tag]["meow"] == nil {
+		LiveBuffer.Map[dp.Tag]["meow"] = make(map[string][][]byte)
+	}
+
+	LiveBuffer.Mux.Lock()
+	LiveBuffer.Map[dp.Tag]["meow"][timeTag] = append(LiveBuffer.Map[dp.Tag]["meow"][timeTag], dp.Value)
+	LiveBuffer.Mux.Unlock()
+	// }
+	// log.Println(LiveBuffer.Map)
+	for _, v := range LiveBuffer.Map {
+		for _, iv := range v {
+			for iii, iiv := range iv {
+				log.Println(iii, iiv)
+			}
 		}
 	}
 }
 
-func (c *Controller) WriteBufferToFile(buffer bytes.Buffer) {
+// func (c *Controller) WriteBufferToFile() {
 
-	now := time.Now().Format(time.RFC3339Nano)
-	now = strings.Replace(now, "-", "/", -1)
-	now = strings.Replace(now, "T", "/", -1)
-	now = strings.Replace(now, ":", "/", 1)
-	//	helpers.DebugLog(strings.Split(now, ":")[0])
-	err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0700)
-	now = strings.Replace(now, ":", "/", 1)
-	helpers.PanicX(err)
-	helpers.DebugLog("writing to file:", c.BufferDirectoryPath+now)
-	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
-	helpers.PanicX(err)
-	buffer.WriteTo(file)
-}
+// 	now := time.Now().Format(time.RFC3339Nano)
+// 	now = strings.Replace(now, "-", "/", -1)
+// 	now = strings.Replace(now, "T", "/", -1)
+// 	now = strings.Replace(now, ":", "/", 1)
+// 	//	helpers.DebugLog(strings.Split(now, ":")[0])
+// 	err := os.MkdirAll(c.BufferDirectoryPath+strings.Split(now, ":")[0], 0700)
+// 	now = strings.Replace(now, ":", "/", 1)
+// 	helpers.PanicX(err)
+// 	helpers.DebugLog("writing to file:", c.BufferDirectoryPath+now)
+// 	file, err := os.OpenFile(c.BufferDirectoryPath+now, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
+// 	helpers.PanicX(err)
+// 	for i, v := range c.CollectionBuffer {
+// 		// file.Write(v. )
+// 		for ii, iv := range v {
+// 			log.Println("FileName:", iv.Tag)
+// 			// 1. open file by tag/datapoint/timestamp
+// 			// 2. write contents
+
+// 		}
+// 	}
+// 	// buffer.WriteTo(file)
+// }

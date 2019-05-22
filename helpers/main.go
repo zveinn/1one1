@@ -64,8 +64,8 @@ func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag st
 	var base int64 = 0
 	// log.Println(baseValueList)
 	// log.Println(valueList)
-	for _, v := range valueList {
-		base = base + v
+	for i, v := range valueList {
+		base = base + (v - preValueList[i])
 	}
 	if batchTag != "" && len(batchTag) < 255 && base != 0 {
 		headers = append(headers, byte(len(batchTag)))
@@ -77,21 +77,25 @@ func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag st
 		var length int
 		// if there is no change from the base value list we don't need to
 		// send any data, just a control byte indicator
-		if v == 0 {
+		if v == preValueList[i] {
 			continue
-		} else if v == baseValueList[i] {
+		}
+
+		if v == baseValueList[i] {
 			length = 1
-		} else if v == preValueList[i] {
-			continue
 		} else {
 
-			length = WriteIntToBuffer(&buffer, v-baseValueList[i])
-			length = length + 1
-			if v < 0 {
+			value := v - baseValueList[i]
+
+			if value < 0 {
+				value = +value
 				data = append(data, byte(0))
 			} else {
 				data = append(data, byte(1))
 			}
+			length = WriteIntToBuffer(&buffer, v-baseValueList[i])
+			length = length + 1
+			data = append(data, buffer.Bytes()...)
 		}
 
 		final, err := strconv.Atoi(strconv.Itoa(i) + strconv.Itoa(length))
@@ -99,18 +103,21 @@ func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag st
 			panic(err)
 		}
 		headers = append(headers, byte(final))
-		if length != 1 {
-			data = append(data, buffer.Bytes()...)
-		}
 
 		buffer.Reset()
 	}
 	dataAndHeader = append(dataAndHeader, byte(len(headers)))
 	dataAndHeader = append(dataAndHeader, headers...)
 	dataAndHeader = append(dataAndHeader, data...)
-	log.Println(baseValueList)
-	log.Println(valueList)
-	log.Println(batchTag)
+	// debug
+	// log.Println(batchTag)
+	// for i, v := range valueList {
+	// 	fmt.Print("{", i, "}", v-baseValueList[i], "{", v-preValueList[i], "}", " .. ")
+	// }
+	// fmt.Println()
+	// log.Println(baseValueList)
+	// log.Println(valueList)
+
 	// log.Println("formatted bytes", dataAndHeader)
 	return dataAndHeader
 }
