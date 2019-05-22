@@ -100,7 +100,7 @@ func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int)
 func ParseDataPoint(data []byte) {
 	// log.Pri
 	// log.Println(data)
-	log.Println("length of original:", len(data))
+	// log.Println("length of original:", len(data))
 	var b bytes.Buffer
 	w := zlib.NewWriter(&b)
 	w.Write(data)
@@ -128,8 +128,8 @@ func ParseDataPoint(data []byte) {
 	entropyEndIndex := parseSection(data, loadEndIndex)
 
 	log.Println("NEWORKING:")
-	networkEndIndex := parseNetworkingSection(data, entropyEndIndex)
-	log.Println(networkEndIndex)
+	_ = parseNetworkingSection(data, entropyEndIndex)
+	// log.Println(networkEndIndex)
 	// os.Exit(1)
 
 }

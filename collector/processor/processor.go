@@ -146,11 +146,12 @@ func sendFirstBasePoint(collector *Collector, controller *Controller) {
 	if err != nil {
 		panic(err)
 	}
-	helpers.DebugLog("last base index:", collector.LastBasePointIndex)
-	helpers.DebugLog(collector.PointMap[collector.LastBasePointIndex])
+	// helpers.DebugLog("buffer len after timestamp", newbuffer.Len())
+	// helpers.DebugLog("last base index:", collector.LastBasePointIndex)
+	// helpers.DebugLog(collector.PointMap[collector.LastBasePointIndex])
 	newbuffer.Write(data)
 	// newbuffer = append(newbuffer, data)
-	helpers.DebugLog(newbuffer.Bytes())
+	// helpers.DebugLog("bytes from first base:", newbuffer.Bytes())
 	_, err = newbuffer.WriteTo(controller.Conn)
 	if err != nil {
 		panic(err)
@@ -280,7 +281,7 @@ func (c *Controller) OpenSendChannel() {
 		newbuffer.Write(data)
 
 		// newbuffer = append(newbuffer, data)
-		// helpers.DebugLog(newbuffer.Bytes())
+		// helpers.DebugLog("Bytes from pipes:", newbuffer.Bytes())
 		n, err := newbuffer.WriteTo(c.Conn)
 		newbuffer.Reset()
 		// _, err := c.Conn.Write(newbuffer)

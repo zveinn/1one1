@@ -33,7 +33,7 @@ func main() {
 	}
 
 	LiveBuffer = &Collection{
-		Map: make(map[string]map[string]map[string][][]byte),
+		Map: make(map[string]map[string]map[uint64][][]byte),
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
@@ -72,7 +72,7 @@ type Controller struct {
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
-	Map map[string]map[string]map[string][][]byte
+	Map map[string]map[string]map[uint64][][]byte
 	Mux sync.Mutex
 }
 
@@ -156,6 +156,12 @@ func deliverNamespaces(conn net.Conn) {
 	helpers.PanicX(err)
 }
 func receiveConnection(conn net.Conn, controller *Controller) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			helpers.DebugLog("recovered in connection receiver ", r)
+		}
+	}()
 	helpers.DebugLog("Connection from:", conn.RemoteAddr())
 
 	message, _ := bufio.NewReader(conn).ReadString('\n')
@@ -217,24 +223,26 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 	reader := bufio.NewReader(collector.Conn)
 	for {
+		// log.Println("loop one!")
 		controlBytes := make([]byte, 3)
 		_, err := reader.Read(controlBytes)
 		if err != nil {
 			panic(err)
 		}
-		// log.Println(lengthByte)
+		// log.Println(controlBytes)
 		length := binary.LittleEndian.Uint16(controlBytes[0:3])
-		log.Println("Length:", length)
-		log.Println("control byte:", controlBytes[2])
+		// log.Println("Length:", length)
+		// log.Println("control byte:", controlBytes[2])
 		// timestamp := binary.LittleEndian.Uint64(controlBytes[3:])
 
 		// log.Println("timestamp", timestamp, "MS:", (timestamp / 1000000), controlBytes[3:])
-		data := make([]byte, length)
+		// +8 for the timestamp at the start of the data
+		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
 			panic(err)
 		}
-		// log.Println(data)
+		// log.Println("data from read:", data)
 		// ParseDataPoint(data)
 
 		go controller.parseIncomingData(collector.TAG, data, int(controlBytes[2]))
@@ -294,30 +302,32 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 
 	// timestamp := dp.Timestamp.Unix()
 	// tag := dp.Tag
-	log.Println(dp.Value)
+	// log.Println(dp.Value)
 	timestamp := binary.LittleEndian.Uint64(dp.Value[:8])
 	log.Println("data starting sequence:", dp.Value[8:20])
-	log.Println("timestamp", timestamp, "MS:", (timestamp / 1000000), dp.Value[:8])
+	log.Println("timestamp", timestamp, dp.Value[:8])
 
+	// log.Println(dp.Value[8:])
 	ParseDataPoint(dp.Value[8:])
 	timeTag := strconv.FormatInt(dp.Timestamp, 10)
+	log.Println("timetag:", timeTag)
 	// for _, v := range dp.Value {
 	if LiveBuffer.Map[dp.Tag] == nil {
-		LiveBuffer.Map[dp.Tag] = make(map[string]map[string][][]byte)
+		LiveBuffer.Map[dp.Tag] = make(map[string]map[uint64][][]byte)
 	}
 	if LiveBuffer.Map[dp.Tag]["meow"] == nil {
-		LiveBuffer.Map[dp.Tag]["meow"] = make(map[string][][]byte)
+		LiveBuffer.Map[dp.Tag]["meow"] = make(map[uint64][][]byte)
 	}
 
 	LiveBuffer.Mux.Lock()
-	LiveBuffer.Map[dp.Tag]["meow"][timeTag] = append(LiveBuffer.Map[dp.Tag]["meow"][timeTag], dp.Value)
+	LiveBuffer.Map[dp.Tag]["meow"][timestamp] = append(LiveBuffer.Map[dp.Tag]["meow"][timestamp], dp.Value)
 	LiveBuffer.Mux.Unlock()
-	// }
+	//
 	// log.Println(LiveBuffer.Map)
 	for _, v := range LiveBuffer.Map {
 		for _, iv := range v {
 			for iii, iiv := range iv {
-				log.Println(iii, iiv)
+				log.Println("A Record:", iii, iiv)
 			}
 		}
 	}
