@@ -20,31 +20,22 @@ func getData(headerValue int, data []byte, valuePointer int) (index, size int, v
 		value := binary.LittleEndian.Uint16(binaryValue)
 		if postOrNeg == 0 {
 			return index, size, int64(-value)
-			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
-		} else {
-			return index, size, int64(value)
-			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
+		return index, size, int64(value)
 
 	} else if size == 5 {
 		value := binary.LittleEndian.Uint32(binaryValue)
 		if postOrNeg == 0 {
 			return index, size, int64(-value)
-			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
-		} else {
-			return index, size, int64(value)
-			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
+		return index, size, int64(value)
 
 	} else if size == 9 {
 		value := binary.LittleEndian.Uint64(binaryValue)
 		if postOrNeg == 0 {
 			return index, size, int64(-value)
-			// log.Println("index/size", index, "/", size, "value(negative): ", -value, "  ///  ", data[valuePointer:valuePointer+size])
-		} else {
-			return index, size, int64(value)
-			// log.Println("index/size", index, "/", size, "value: ", value, "  ///  ", data[valuePointer:valuePointer+size])
 		}
+		return index, size, int64(value)
 
 	} else {
 		log.Println("Whooops!")

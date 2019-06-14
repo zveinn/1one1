@@ -6,6 +6,7 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"errors"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -179,7 +180,14 @@ func (collector *Collector) MaintainControllerCommunications() {
 
 }
 
-func (collector *Collector) CollectStats() {
+func (collector *Collector) CollectStats(watcherChannel chan int) {
+	defer func(watcherChannel chan int) {
+		if r := recover(); r != nil {
+			log.Println("collector panic...", r)
+		}
+		watcherChannel <- 1
+	}(watcherChannel)
+
 	count := collector.CurrentPointIndex
 	for {
 		var data []byte

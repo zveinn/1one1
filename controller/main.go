@@ -22,6 +22,10 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	loadEnvironmentVariables()
 
+	UIServer := &UIServer{
+		IP:   os.Getenv("UI_IP"),
+		PORT: os.Getenv("UI_PORT"),
+	}
 	controller := Controller{
 		IP:                   os.Getenv("IP"),
 		PORT:                 os.Getenv("PORT"),
@@ -37,23 +41,30 @@ func main() {
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
-	controller.start()
+	watcherChannel := make(chan int)
 
-	// capture stop signal in order to exit gracefully.
+	go UIServer.Start(watcherChannel)
+	go controller.start(watcherChannel)
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
-}
 
-type UI struct {
-	Conn        net.Conn
-	Filter      string
-	SendChannel chan string
-}
-type Stat struct {
-	Label       string
-	Value       int
-	StringValue string
+	signal.Notify(stop, os.Interrupt)
+	for {
+		select {
+		case index := <-watcherChannel:
+			if index == 1 {
+				go UIServer.Start(watcherChannel)
+			} else if index == 2 {
+				go controller.start(watcherChannel)
+			}
+			log.Println("goroutine number", index, "just closed...")
+			break
+		case <-stop:
+			// TODO: handle exit gracefully
+			log.Println("handle exit gracefully")
+			os.Exit(1)
+		}
+	}
+
 }
 
 type Controller struct {
@@ -68,7 +79,6 @@ type Controller struct {
 	mutex                sync.Mutex
 	MinLinesInBufferFile int
 	CollectionBuffer     map[string][]*DataPoint
-	mux                  sync.Mutex
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
@@ -115,20 +125,14 @@ func (c *Controller) RemoveCollector(TAG string) {
 	c.Collectors[TAG] = nil
 	c.mutex.Unlock()
 }
-func (c *Controller) AddUI(TAG string, ui *UI) {
-	c.mutex.Lock()
-	c.UIs[TAG] = ui
-	c.mutex.Unlock()
-}
 
-func (c *Controller) RemoveUI(TAG string) {
-	c.mutex.Lock()
-	c.UIs[TAG] = nil
-	c.mutex.Unlock()
-}
-
-func (controller *Controller) start() {
-
+func (controller *Controller) start(watcherChannel chan int) {
+	defer func(watcherChannel chan int) {
+		if r := recover(); r != nil {
+			log.Println("controller crahed !!", r)
+		}
+		watcherChannel <- 2
+	}(watcherChannel)
 	helpers.DebugLog("listening on:", controller.IP+":"+controller.PORT)
 	ln, err := net.Listen("tcp", controller.IP+":"+controller.PORT)
 	helpers.PanicX(err)
@@ -136,18 +140,6 @@ func (controller *Controller) start() {
 		conn, err := ln.Accept()
 		helpers.PanicX(err)
 		go receiveConnection(conn, controller)
-	}
-}
-
-func connectUI(ui *UI, controller *Controller, tag string) {
-	helpers.DebugLog("UI:")
-	controller.AddUI(tag+"TODORANDOMINT?", ui)
-	for {
-		outgoing := <-ui.SendChannel
-		log.Println(outgoing)
-		_, err := ui.Conn.Write([]byte(outgoing))
-		//TODO: handle better
-		helpers.PanicX(err)
 	}
 }
 
@@ -165,16 +157,13 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	helpers.DebugLog("Connection from:", conn.RemoteAddr())
 
 	message, _ := bufio.NewReader(conn).ReadString('\n')
-	if message == "ui\n" {
-		connectUI(&UI{Conn: conn}, controller, message)
-	} else {
-		// STEP 2
-		// Connect a collector
-		connectCollector(&Collector{
-			LastCheckin: time.Now(),
-			Conn:        conn,
-		}, controller, message)
-	}
+
+	// STEP 2
+	// Connect a collector
+	connectCollector(&Collector{
+		LastCheckin: time.Now(),
+		Conn:        conn,
+	}, controller, message)
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	helpers.DebugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
@@ -250,12 +239,6 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 
 }
 
-func (c *Controller) sendToAllUis(msg string) {
-	for _, ui := range c.UIs {
-		ui.SendChannel <- msg
-	}
-}
-
 type DataPoint struct {
 	Value       []byte
 	Tag         string
@@ -307,7 +290,7 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 	log.Println("data starting sequence:", dp.Value[8:20])
 	log.Println("timestamp", timestamp, dp.Value[:8])
 
-	// log.Println(dp.Value[8:])
+	log.Println(dp.Value[8:])
 	ParseDataPoint(dp.Value[8:])
 	timeTag := strconv.FormatInt(dp.Timestamp, 10)
 	log.Println("timetag:", timeTag)
@@ -324,13 +307,13 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 	LiveBuffer.Mux.Unlock()
 	//
 	// log.Println(LiveBuffer.Map)
-	for _, v := range LiveBuffer.Map {
-		for _, iv := range v {
-			for iii, iiv := range iv {
-				log.Println("A Record:", iii, iiv)
-			}
-		}
-	}
+	// for _, v := range LiveBuffer.Map {
+	// 	for _, iv := range v {
+	// 		for iii, iiv := range iv {
+	// 			log.Println("A Record:", iii, iiv)
+	// 		}
+	// 	}
+	// }
 }
 
 // func (c *Controller) WriteBufferToFile() {

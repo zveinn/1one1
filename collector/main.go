@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/signal"
 
@@ -35,9 +36,10 @@ func main() {
 	go collector.MaintainControllerCommunications()
 	// Each stats category should be it's own goroutine?
 
+	watcherChannel := make(chan int)
 	// missing header means no change
 	// header with a length of 1 means we're back to base.
-	go collector.CollectStats()
+	go collector.CollectStats(watcherChannel)
 
 	// todo
 	// go collector.SendStats()
@@ -50,5 +52,18 @@ func main() {
 	// capture stop signal in order to exit gracefully.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
-	<-stop
+	for {
+		select {
+		case index := <-watcherChannel:
+			if index == 1 {
+				go collector.CollectStats(watcherChannel)
+			}
+			log.Println("goroutine number", index, "just closed...")
+			break
+		case <-stop:
+			// TODO: handle exit gracefully
+			log.Println("handle exit gracefully")
+			os.Exit(1)
+		}
+	}
 }
