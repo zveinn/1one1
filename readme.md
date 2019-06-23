@@ -4,7 +4,7 @@
 ## refactoring
 ### add logger !!
 ## client UI
-- 1. put UI on a different port
+<!-- - 1. put UI on a different port -->
 - 2. add a config for the UI struct
 - 3. design handshake for the UI
     - this means making a golang UI client to test. 
@@ -25,3 +25,9 @@
 - How much bandwidth is each collector using?
      - check different update rates
      
+
+
+# handshake
+1. ui sends config and is ready to receive
+2. controller find nearest basepoint and starts streaming.
+3. 

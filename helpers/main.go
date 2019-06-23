@@ -5,16 +5,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 func DebugLog(v ...interface{}) {
-	if os.Getenv("DEBUG") == "true" {
-		log.Println(v...)
-	}
+	// if os.Getenv("DEBUG") == "true" {
+	log.Println(v...)
+	// }
 }
 func PanicX(err error) {
 	if err != nil {

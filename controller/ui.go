@@ -1,29 +1,31 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"log"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/zkynetio/lynx/helpers"
 )
 
 type UIServer struct {
-	IP         string
-	PORT       string
-	ClientList []*UI
+	ClientList map[string]*UI
 	mutex      sync.Mutex
+	Settings   *Settings
 }
 
 func (ui *UIServer) AddUI(TAG string, client *UI) {
 	ui.mutex.Lock()
-	ui.ClientList = append(ui.ClientList, client)
+	ui.ClientList[TAG] = client
 	ui.mutex.Unlock()
 }
 
 func (ui *UIServer) RemoveUI(TAG string) {
 	ui.mutex.Lock()
-	// c.UIS[TAG] = nil
+	ui.ClientList[TAG] = nil
 	// TODO...
 	ui.mutex.Unlock()
 }
@@ -34,8 +36,8 @@ func (ui *UIServer) Start(watcherChannel chan int) {
 		}
 		watcherChannel <- 1
 	}(watcherChannel)
-	helpers.DebugLog("listening on:", ui.IP+":"+ui.PORT)
-	ln, err := net.Listen("tcp", ui.IP+":"+ui.PORT)
+	helpers.DebugLog("ui listening on:", ui.Settings.UIIP+":"+ui.Settings.UIPORT)
+	ln, err := net.Listen("tcp", ui.Settings.UIIP+":"+ui.Settings.UIPORT)
 	helpers.PanicX(err)
 	for {
 		conn, err := ln.Accept()
@@ -46,11 +48,37 @@ func (ui *UIServer) Start(watcherChannel chan int) {
 func (ui *UIServer) AcceptConnection(conn net.Conn) {
 
 	ui.AddUI("meow", &UI{
-		Conn:        conn,
+		Conn: conn,
+		// we need this in case the client disconnects.
 		DataChannel: make(chan []byte),
 	})
 
+	configData, _ := bufio.NewReader(conn).ReadString('\n')
+	configData = strings.Trim(configData, "\n")
+
+	config := &Config{
+		Blink:      Blink{},
+		X:          X{},
+		Y:          Y{},
+		Z:          Z{},
+		Luminocity: Luminocity{},
+		Size:       Size{},
+	}
+	err := json.Unmarshal([]byte(configData), config)
+	helpers.PanicX(err)
 	// start handshake..
+}
+func (u *UI) ReceiveFromConnection() {
+
+	reader := bufio.NewReader(u.Conn)
+
+	for {
+		data, err := reader.ReadString('\n')
+		if err != nil {
+			helpers.PanicX(err)
+		}
+		log.Println(data)
+	}
 }
 
 type UI struct {
@@ -80,8 +108,8 @@ type Config struct {
 	Luminocity Luminocity
 	Size       Size
 	// Rate in milliseconds
-	UpdateRate int
-	Paused     bool
+	UpdateRate   int
+	wantsUpdates bool
 }
 
 type Blink struct {
@@ -109,10 +137,6 @@ type Y struct {
 type Z struct {
 	Index     int
 	Normalize bool
-}
-
-func meow() {
-
 }
 
 // func connectUI(ui *UI, controller *Controller, tag string) {

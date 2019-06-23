@@ -14,21 +14,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/zkynetio/lynx/helpers"
 )
 
 func main() {
 	rand.Seed(time.Now().Unix())
-	loadEnvironmentVariables()
 
+	Settings := &Settings{}
+	Settings.LoadConfigFromFile("config.yml")
+
+	log.Println("Settings:", Settings)
 	UIServer := &UIServer{
-		IP:   os.Getenv("UI_IP"),
-		PORT: os.Getenv("UI_PORT"),
+		Settings:   Settings,
+		ClientList: make(map[string]*UI),
 	}
 	controller := Controller{
-		IP:                   os.Getenv("IP"),
-		PORT:                 os.Getenv("PORT"),
+		Settings:             Settings,
 		Collectors:           make(map[string]*Collector),
 		Buffer:               make(chan *DataPoint, 10000),
 		BufferDirectoryPath:  "./buffers/",
@@ -71,6 +72,7 @@ type Controller struct {
 	Buffer chan *DataPoint
 	// Recovery in sqlite?
 	//RecoveryFile string
+	Settings             *Settings
 	BufferDirectoryPath  string
 	PORT                 string
 	IP                   string
@@ -107,13 +109,6 @@ type Collector struct {
 	SendChannel chan string
 }
 
-func loadEnvironmentVariables() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		helpers.DebugLog(err)
-		log.Fatal("Error loading .env file")
-	}
-}
 func (c *Controller) AddCollector(TAG string, collector *Collector) {
 	c.mutex.Lock()
 	c.Collectors[TAG] = collector
@@ -133,8 +128,8 @@ func (controller *Controller) start(watcherChannel chan int) {
 		}
 		watcherChannel <- 2
 	}(watcherChannel)
-	helpers.DebugLog("listening on:", controller.IP+":"+controller.PORT)
-	ln, err := net.Listen("tcp", controller.IP+":"+controller.PORT)
+	helpers.DebugLog("listening on:", controller.Settings.IP+":"+controller.Settings.PORT)
+	ln, err := net.Listen("tcp", controller.Settings.IP+":"+controller.Settings.PORT)
 	helpers.PanicX(err)
 	for {
 		conn, err := ln.Accept()
@@ -143,10 +138,6 @@ func (controller *Controller) start(watcherChannel chan int) {
 	}
 }
 
-func deliverNamespaces(conn net.Conn) {
-	_, err := conn.Write([]byte("NS|general.entropy:5,memory.total:5\n"))
-	helpers.PanicX(err)
-}
 func receiveConnection(conn net.Conn, controller *Controller) {
 	defer func() {
 		r := recover()
@@ -176,35 +167,19 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	}()
 
 	// STEP 3
-	// Send namespaces to collector
-	deliverNamespaces(collector.Conn)
-
-	// STEP 6
-	// Listen for an OK
-	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
-	if msg == "k\n" {
-		helpers.DebugLog("K from collector")
-	} else {
-		helpers.DebugLog(msg)
-		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
+	// Send indexes to collector
+	_, err := collector.Conn.Write([]byte("I:" + controller.Settings.FormatIndexesForNetworkWriting() + "\n"))
+	if err != nil {
+		helpers.PanicX(err)
 	}
 
 	// STEP 7
 	// Listen for host data
-	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
+	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
 	if !strings.Contains(string(msg), "H||") {
 		helpers.PanicX(errors.New("no host data found in handskae" + string(msg)))
 	}
 	helpers.DebugLog("HOST DATA:", string(msg))
-
-	// STEP 9
-	// Listen for final OK
-	helpers.DebugLog("waiting for final ok ...")
-	msg, _ = bufio.NewReader(collector.Conn).ReadString('\n')
-	if msg != "k\n" {
-		helpers.DebugLog(msg)
-		helpers.PanicX(errors.New("NOT OK FROM COLLECTOR"))
-	}
 
 	log.Println("Starting general collection from:", collector.TAG)
 	readFromConnectionOriginal(collector, controller)

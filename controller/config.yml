@@ -1,0 +1,6 @@
+ip: 127.0.0.1
+port: 7771
+uiip: 127.0.0.1
+uiport: 7772
+indexes: [1,3,4,5]
+debug: true

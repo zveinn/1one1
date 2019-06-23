@@ -106,7 +106,7 @@ func (c *Collector) CleanupOnExit() {
 	}
 }
 
-func (collector *Collector) EngageControllerCommunications() {
+func (collector *Collector) EngageDataFlow() {
 	for {
 		time.Sleep(time.Duration(collector.ListenerInterval) * time.Second)
 		for _, controller := range collector.Controllers {
@@ -116,11 +116,7 @@ func (collector *Collector) EngageControllerCommunications() {
 			helpers.DebugLog("Engaging controller listener to", controller.Address)
 			go controller.Listen()
 			go controller.OpenSendChannel()
-			helpers.DebugLog("Sending final ok ..")
 
-			// STEP 10
-			_, err := controller.Conn.Write([]byte("k\n"))
-			helpers.PanicX(err)
 			controller.ChangeListenerStatus(true)
 			controller.ChangeReceivingStatus(true)
 			// send the first base point
@@ -342,13 +338,13 @@ func (c *Collector) handShakeWithController(controller *Controller, tag string) 
 	helpers.PanicX(err)
 
 	// STEP 4
-	// Listening for namespaces from controller
+	// Listening for indexes from controller
 	message, err := bufio.NewReader(controller.Conn).ReadString('\n')
-	if !strings.Contains(message, "NS|") {
+	if !strings.Contains(message, "I:") {
 		_ = controller.Conn.Close()
 		controller.Setconnection(nil)
 		// TODO: handle better
-		err = errors.New("namespaces not delivered" + message + " // pipe read error was" + err.Error())
+		err = errors.New("indexses not delivered" + message + " // pipe read error was" + err.Error())
 		return
 	}
 
@@ -358,12 +354,6 @@ func (c *Collector) handShakeWithController(controller *Controller, tag string) 
 	helpers.DebugLog("NAMESPACES:", namespaces)
 	NS = namespaces
 	controller.HaveNamespacesBeenDelivered(true)
-
-	// STEP 5
-	// sending OK
-	helpers.DebugLog("sending ok !")
-	_, err = controller.Conn.Write([]byte("k\n"))
-	helpers.PanicX(err)
 
 	// STEP 8
 	// sending host data

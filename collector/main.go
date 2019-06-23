@@ -31,8 +31,7 @@ func main() {
 		os.Getenv("TAG"),
 		collector,
 	)
-
-	go collector.EngageControllerCommunications()
+	go collector.EngageDataFlow()
 	go collector.MaintainControllerCommunications()
 	// Each stats category should be it's own goroutine?
 
