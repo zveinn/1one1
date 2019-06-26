@@ -22,7 +22,7 @@ type Collector struct {
 	Buffer             chan []byte
 	RecoveryFile       string
 	TAG                string
-	Controllers        []*Controller
+	Controllers        map[string]*Controller
 	mutex              sync.Mutex
 	PointMap           map[int][]byte
 	StaticMap          map[int]string
@@ -33,7 +33,6 @@ type Collector struct {
 	ListenerInterval   int
 	CollectionInterval int
 	mux                sync.Mutex
-	Indexes            []string
 }
 
 // 60 * 60 = 3600 data points = 1 hour
@@ -92,7 +91,16 @@ func (c *Collector) GetIntervalsFromEnvironmentVariables() {
 }
 func (c *Collector) AddController(cont *Controller) {
 	c.mutex.Lock()
-	c.Controllers = append(c.Controllers, cont)
+	c.Controllers[cont.Address] = cont
+	// c.Controllers = append(c.Controllers, cont)
+	c.mutex.Unlock()
+}
+func (c *Collector) RemoveController(cont *Controller) {
+	c.mutex.Lock()
+	if cont.Conn != nil {
+		_ = cont.Conn.Close()
+	}
+	delete(c.Controllers, cont.Address)
 	c.mutex.Unlock()
 }
 func (c *Collector) CleanupOnExit() {
@@ -104,23 +112,6 @@ func (c *Collector) CleanupOnExit() {
 	}
 }
 
-func (collector *Collector) EngageDataFlow() {
-	for {
-		time.Sleep(time.Duration(collector.ListenerInterval) * time.Second)
-		for _, controller := range collector.Controllers {
-			if !controller.Active || controller.HasListener {
-				continue
-			}
-			helpers.DebugLog("Engaging controller listener to", controller.Address)
-			go controller.Listen()
-			go controller.OpenSendChannel()
-			controller.ChangeListenerStatus(true)
-			controller.ChangeReceivingStatus(true)
-			// send the first base point
-			sendFirstBasePoint(collector, controller)
-		}
-	}
-}
 func sendFirstBasePoint(collector *Collector, controller *Controller) {
 	var data []byte
 	if len(collector.PointMap) > 0 {
@@ -153,7 +144,13 @@ func sendFirstBasePoint(collector *Collector, controller *Controller) {
 	newbuffer.Reset()
 }
 
-func (collector *Collector) MaintainControllerCommunications() {
+func (collector *Collector) MaintainControllerCommunications(watcherChannel chan int) {
+	defer func(watcherChannel chan int) {
+		if r := recover(); r != nil {
+			log.Println("collector panic...", r)
+		}
+		watcherChannel <- 2
+	}(watcherChannel)
 	for {
 		// TODO: implement rand int sleeper
 		time.Sleep(time.Duration(collector.MaintainerInterval) * time.Second)
@@ -168,6 +165,10 @@ func (collector *Collector) MaintainControllerCommunications() {
 			}
 			helpers.DebugLog("Recovered connection to:", controller.Address)
 			controller.ChangeActiveStatus(true)
+
+			helpers.DebugLog("Engaging controller listener to", controller.Address)
+			go controller.OpenSendChannel()
+			sendFirstBasePoint(collector, controller)
 		}
 	}
 
@@ -210,7 +211,8 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		// continue
 		// log.Println(data)
 		for _, controller := range collector.Controllers {
-			if controller.ReadyToReceive {
+			// log.Println("controller", controller.Address, " is active:", controller.Active)
+			if controller.Active {
 				controller.Send <- data
 			}
 		}
@@ -218,38 +220,21 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 }
 
 type Controller struct {
-	Address          string
-	Active           bool
-	HasListener      bool
-	IndexesDelivered bool
-	ReadyToReceive   bool
-	Conn             net.Conn
-	Retry            int
-	mutex            sync.Mutex
-	Send             chan []byte
+	Address string
+	Active  bool
+	Conn    net.Conn
+	Retry   int
+	mutex   sync.Mutex
+	Send    chan []byte
 	//InactiveSince time.Time
 }
 
-func (c *Controller) ChangeReceivingStatus(status bool) {
-	c.mutex.Lock()
-	c.ReadyToReceive = status
-	c.mutex.Unlock()
-}
 func (c *Controller) ChangeActiveStatus(status bool) {
 	c.mutex.Lock()
 	c.Active = status
 	c.mutex.Unlock()
 }
-func (c *Controller) HaveIndexesBeenDelivered(delivered bool) {
-	c.mutex.Lock()
-	c.IndexesDelivered = delivered
-	c.mutex.Unlock()
-}
-func (c *Controller) ChangeListenerStatus(status bool) {
-	c.mutex.Lock()
-	c.HasListener = status
-	c.mutex.Unlock()
-}
+
 func (c *Controller) Setconnection(conn net.Conn) {
 	c.mutex.Lock()
 	c.Conn = conn
@@ -259,6 +244,8 @@ func (c *Controller) Setconnection(conn net.Conn) {
 func (c *Controller) OpenSendChannel() {
 	defer func() {
 		helpers.DebugLog("Closing send loop to controller", c.Address)
+		c.ChangeActiveStatus(false)
+		close(c.Send)
 	}()
 	c.Send = make(chan []byte, 10000)
 	newbuffer := new(bytes.Buffer)
@@ -294,32 +281,6 @@ func (c *Controller) OpenSendChannel() {
 	}
 }
 
-func (c *Controller) Listen() {
-	defer func() {
-
-		helpers.DebugLog("defering read pipe from", c.Address)
-		close(c.Send)
-		c.ChangeActiveStatus(false)
-		c.ChangeListenerStatus(false)
-		c.ChangeReceivingStatus(false)
-		c.Setconnection(nil)
-		c.HaveIndexesBeenDelivered(false)
-	}()
-
-	for {
-		msg, err := bufio.NewReader(c.Conn).ReadString('\n')
-		// TODO: handle better
-		if err != nil || msg == "c\n" {
-			_ = c.Conn.Close()
-			helpers.DebugLog("Error and/or message in read pipe from" + c.Address + " // " + msg + " //" + err.Error())
-			break
-		}
-
-		helpers.DebugLog("IN:", msg)
-	}
-
-}
-
 func dialController(controller *Controller) (err error) {
 	conn, err := net.Dial("tcp", controller.Address)
 	if err != nil {
@@ -329,57 +290,50 @@ func dialController(controller *Controller) (err error) {
 	return
 }
 func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
-	// STEP 1
-	// send TAG to controller
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
 
-	// STEP 4
-	// Listening for indexes from controller
-	message, err := bufio.NewReader(controller.Conn).ReadString('\n')
-	if !strings.Contains(message, "I:") {
-		_ = controller.Conn.Close()
-		controller.Setconnection(nil)
-		// TODO: handle better
-		err = errors.New("indexses not delivered" + message + " // pipe read error was" + err.Error())
-		return
-	}
-
-	// see readme
-	indexes := strings.Split(strings.Split(strings.TrimSuffix(message, "\n"), ":")[1], ",")
-	helpers.DebugLog("Indexes:", indexes)
-	c.Indexes = indexes
-	controller.HaveIndexesBeenDelivered(true)
-
-	// STEP 8
-	// sending host data
 	data := stats.GetStaticBasePoint()
 	_ = c.AddStaticPoint(data)
 	_, err = controller.Conn.Write([]byte(data + "\n"))
 	helpers.PanicX(err)
+
+	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
+	if msg != "k\n" || err != nil {
+		log.Println("Coult not handshake with controller", msg)
+		if err != nil {
+			return err
+		}
+
+		return errors.New("Could not handshake with controller")
+	}
 	controller.ChangeActiveStatus(true)
 	return
 }
 func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err error) {
-	if err = dialController(controller); err != nil {
+	err = dialController(controller)
+	if err != nil {
 		return
 	}
-	if err = c.handShakeWithController(controller, tag); err != nil {
+	err = c.handShakeWithController(controller, tag)
+	if err != nil {
 		return
 	}
 	return
 }
 func ConnectToControllers(controllers string, tag string, collector *Collector) {
 	for _, v := range strings.Split(controllers, ",") {
-		controller := &Controller{Address: v, Active: false, HasListener: false, IndexesDelivered: false}
+		controller := &Controller{Address: v, Active: false}
 		collector.AddController(controller)
 
 		helpers.DebugLog("Connecting to:", v)
 		if err := collector.dialAndHandshake(controller, tag); err != nil {
 			helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
+			collector.RemoveController(controller)
 			continue
 		}
 		helpers.DebugLog("Connected to:", controller.Address)
-
+		go controller.OpenSendChannel()
+		sendFirstBasePoint(collector, controller)
 	}
 }

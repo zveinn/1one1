@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,18 +26,20 @@ func main() {
 	UIServer := &UIServer{
 		Settings:   Settings,
 		ClientList: make(map[string]*UI),
+		DPChan:     make(chan DataPoint, 1000000),
 	}
+	go UIServer.ShipToUIS()
 	controller := Controller{
 		Settings:             Settings,
 		Collectors:           make(map[string]*Collector),
-		Buffer:               make(chan *DataPoint, 10000),
+		Buffer:               make(chan *DataPoint, 1000000),
 		BufferDirectoryPath:  "./buffers/",
 		MinLinesInBufferFile: 10,
-		CollectionBuffer:     make(map[string][]*DataPoint),
+		UI:                   UIServer,
 	}
 
 	LiveBuffer = &Collection{
-		Map: make(map[string]map[string]map[uint64][][]byte),
+		Map: make(map[string]map[string]map[uint64][]byte),
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
@@ -80,11 +81,11 @@ type Controller struct {
 	UIs                  map[string]*UI
 	mutex                sync.Mutex
 	MinLinesInBufferFile int
-	CollectionBuffer     map[string][]*DataPoint
+	UI                   *UIServer
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
-	Map map[string]map[string]map[uint64][][]byte
+	Map map[string]map[string]map[uint64][]byte
 	Mux sync.Mutex
 }
 
@@ -109,10 +110,15 @@ type Collector struct {
 	SendChannel chan string
 }
 
-func (c *Controller) AddCollector(TAG string, collector *Collector) {
+func (c *Controller) AddCollector(TAG string, collector *Collector) error {
 	c.mutex.Lock()
+	if c.Collectors[TAG] != nil {
+		log.Println("A controller already exists with this tag:", TAG)
+		return errors.New("This TAG already exists")
+	}
 	c.Collectors[TAG] = collector
 	c.mutex.Unlock()
+	return nil
 }
 
 func (c *Controller) RemoveCollector(TAG string) {
@@ -157,29 +163,32 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	}, controller, message)
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
-	helpers.DebugLog("COLLECTOR:", strings.TrimSuffix(message, "\n"))
 	collector.TAG = strings.TrimSuffix(message, "\n")
 
-	controller.AddCollector(collector.TAG, collector)
+	helpers.DebugLog("COLLECTOR:", collector.TAG)
+	err := controller.AddCollector(collector.TAG, collector)
+	if err != nil {
+		_, _ = collector.Conn.Write([]byte("E: this TAG already exists\n"))
+		_ = collector.Conn.Close()
+		return
+	}
 	defer func() {
 		helpers.DebugLog("Closing read pipe from", collector.TAG)
 		controller.RemoveCollector(collector.TAG)
 	}()
 
-	// STEP 3
-	// Send indexes to collector
-	_, err := collector.Conn.Write([]byte("I:" + controller.Settings.FormatIndexesForNetworkWriting() + "\n"))
-	if err != nil {
-		helpers.PanicX(err)
-	}
-
-	// STEP 7
-	// Listen for host data
 	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
 	if !strings.Contains(string(msg), "H||") {
 		helpers.PanicX(errors.New("no host data found in handskae" + string(msg)))
 	}
 	helpers.DebugLog("HOST DATA:", string(msg))
+
+	_, err = collector.Conn.Write([]byte("k\n"))
+	if err != nil {
+		helpers.DebugLog("could not establish coms with collector", err)
+		controller.RemoveCollector(collector.TAG)
+		return
+	}
 
 	log.Println("Starting general collection from:", collector.TAG)
 	readFromConnectionOriginal(collector, controller)
@@ -211,6 +220,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		// ParseDataPoint(data)
 
 		go controller.parseIncomingData(collector.TAG, data, int(controlBytes[2]))
+		go controller.sendToUIS(collector.TAG, data)
 
 	}
 
@@ -232,7 +242,14 @@ func (c *Controller) parseIncomingData(tag string, data []byte, controlByte int)
 		ControlByte: controlByte,
 	}
 }
+func (c *Controller) sendToUIS(tag string, data []byte) {
 
+	//helpers.DebugLog("DATA:", msg)
+	c.UI.DPChan <- DataPoint{
+		Value: data,
+		Tag:   tag,
+	}
+}
 func (c *Controller) EngageBufferPipe() {
 
 	// TODO: grow properly, we are writing strings.. but the buffer grows in bytes
@@ -244,11 +261,10 @@ func (c *Controller) EngageBufferPipe() {
 			helpers.DebugLog("chan length", len(c.Buffer))
 		}
 
-		dp := <-c.Buffer
 		// CollectionBuffer.mux.Lock()
 		// c.CollectionBuffer[dp.Tag] = append(c.CollectionBuffer[dp.Tag], dp)
 		// CollectionBuffer.mux.Unlock()
-		c.ParseDataPointIntoMemoryMap(dp)
+		c.ParseDataPointIntoMemoryMap(<-c.Buffer)
 		// log.Println(c.CollectionBuffer)
 		// size = size + len(dp.Value)
 		// if size > 3000 {
@@ -264,33 +280,35 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 	// tag := dp.Tag
 	// log.Println(dp.Value)
 	timestamp := binary.LittleEndian.Uint64(dp.Value[:8])
-	log.Println("data starting sequence:", dp.Value[8:20])
-	log.Println("timestamp", timestamp, dp.Value[:8])
+	// log.Println("data starting sequence:", dp.Value[8:20])
+	// log.Println("timestamp", timestamp, dp.Value[:8])
 
-	log.Println(dp.Value[8:])
-	ParseDataPoint(dp.Value[8:])
-	timeTag := strconv.FormatInt(dp.Timestamp, 10)
-	log.Println("timetag:", timeTag)
+	// tm := time.Unix(0, int64(timestamp))
+	// fmt.Println(tm.Format(time.RFC3339))
+
+	log.Println("Data from:", dp.Tag)
+	// log.Println(dp.Value[8:])
+	// ParseDataPoint(dp.Value[8:])
 	// for _, v := range dp.Value {
 	if LiveBuffer.Map[dp.Tag] == nil {
-		LiveBuffer.Map[dp.Tag] = make(map[string]map[uint64][][]byte)
+		LiveBuffer.Map[dp.Tag] = make(map[string]map[uint64][]byte)
 	}
-	if LiveBuffer.Map[dp.Tag]["meow"] == nil {
-		LiveBuffer.Map[dp.Tag]["meow"] = make(map[uint64][][]byte)
+	if LiveBuffer.Map[dp.Tag][dp.Tag] == nil {
+		LiveBuffer.Map[dp.Tag][dp.Tag] = make(map[uint64][]byte)
 	}
 
 	LiveBuffer.Mux.Lock()
-	LiveBuffer.Map[dp.Tag]["meow"][timestamp] = append(LiveBuffer.Map[dp.Tag]["meow"][timestamp], dp.Value)
+	LiveBuffer.Map[dp.Tag][dp.Tag][timestamp] = dp.Value
 	LiveBuffer.Mux.Unlock()
 	//
-	log.Println(LiveBuffer.Map)
-	for _, v := range LiveBuffer.Map {
-		for _, iv := range v {
-			for iii, iiv := range iv {
-				log.Println("A Record:", iii, iiv)
-			}
-		}
-	}
+	// log.Println(LiveBuffer.Map)
+	// for i, v := range LiveBuffer.Map {
+	// 	for _, iv := range v {
+	// 		for iii, _ := range iv {
+	// 			log.Println("A Record:", i, iii)
+	// 		}
+	// 	}
+	// }
 }
 
 // func (c *Controller) WriteBufferToFile() {

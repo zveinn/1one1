@@ -23,21 +23,22 @@ func main() {
 	defer collector.CleanupOnExit()
 	collector.PointMap = make(map[int][]byte)
 	collector.StaticMap = make(map[int]string)
+	collector.Controllers = make(map[string]*processor.Controller)
 
 	stats.InitStats()
 
+	tag := os.Getenv("TAG")
+	if os.Args[1] != "" {
+		tag = os.Args[1]
+	}
 	processor.ConnectToControllers(
 		os.Getenv("CONTROLLERS"),
-		os.Getenv("TAG"),
+		tag,
 		collector,
 	)
-	go collector.EngageDataFlow()
-	go collector.MaintainControllerCommunications()
-	// Each stats category should be it's own goroutine?
 
 	watcherChannel := make(chan int)
-	// missing header means no change
-	// header with a length of 1 means we're back to base.
+	go collector.MaintainControllerCommunications(watcherChannel)
 	go collector.CollectStats(watcherChannel)
 
 	// todo
@@ -56,8 +57,10 @@ func main() {
 		case index := <-watcherChannel:
 			if index == 1 {
 				go collector.CollectStats(watcherChannel)
+			} else if index == 2 {
+				go collector.MaintainControllerCommunications(watcherChannel)
 			}
-			log.Println("goroutine number", index, "just closed...")
+			log.Println("goroutine number", index, "just restarted...")
 			break
 		case <-stop:
 			// TODO: handle exit gracefully

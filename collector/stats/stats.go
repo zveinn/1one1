@@ -68,6 +68,7 @@ func CollectDynamicData() []byte {
 	collectNetworkDownloadAndUpload(History.DynamicUpdatePoint)
 	var theBytes []byte
 	// THIS ORDER MATTERS.. DO NOT CHANGE!
+	// if
 	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.MemoryDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
