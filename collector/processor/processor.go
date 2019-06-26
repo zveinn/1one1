@@ -18,9 +18,6 @@ import (
 	helpers "github.com/zkynetio/lynx/helpers"
 )
 
-var NS []string
-var NSList map[string]int
-
 type Collector struct {
 	Buffer             chan []byte
 	RecoveryFile       string
@@ -36,6 +33,7 @@ type Collector struct {
 	ListenerInterval   int
 	CollectionInterval int
 	mux                sync.Mutex
+	Indexes            []string
 }
 
 // 60 * 60 = 3600 data points = 1 hour
@@ -116,7 +114,6 @@ func (collector *Collector) EngageDataFlow() {
 			helpers.DebugLog("Engaging controller listener to", controller.Address)
 			go controller.Listen()
 			go controller.OpenSendChannel()
-
 			controller.ChangeListenerStatus(true)
 			controller.ChangeReceivingStatus(true)
 			// send the first base point
@@ -221,15 +218,15 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 }
 
 type Controller struct {
-	Address        string
-	Active         bool
-	HasListener    bool
-	NSDelivered    bool
-	ReadyToReceive bool
-	Conn           net.Conn
-	Retry          int
-	mutex          sync.Mutex
-	Send           chan []byte
+	Address          string
+	Active           bool
+	HasListener      bool
+	IndexesDelivered bool
+	ReadyToReceive   bool
+	Conn             net.Conn
+	Retry            int
+	mutex            sync.Mutex
+	Send             chan []byte
 	//InactiveSince time.Time
 }
 
@@ -243,9 +240,9 @@ func (c *Controller) ChangeActiveStatus(status bool) {
 	c.Active = status
 	c.mutex.Unlock()
 }
-func (c *Controller) HaveNamespacesBeenDelivered(delivered bool) {
+func (c *Controller) HaveIndexesBeenDelivered(delivered bool) {
 	c.mutex.Lock()
-	c.NSDelivered = delivered
+	c.IndexesDelivered = delivered
 	c.mutex.Unlock()
 }
 func (c *Controller) ChangeListenerStatus(status bool) {
@@ -306,7 +303,7 @@ func (c *Controller) Listen() {
 		c.ChangeListenerStatus(false)
 		c.ChangeReceivingStatus(false)
 		c.Setconnection(nil)
-		c.HaveNamespacesBeenDelivered(false)
+		c.HaveIndexesBeenDelivered(false)
 	}()
 
 	for {
@@ -348,12 +345,11 @@ func (c *Collector) handShakeWithController(controller *Controller, tag string) 
 		return
 	}
 
-	// TODO: refactor into NSList global
 	// see readme
-	namespaces := strings.Split(strings.Split(strings.TrimSuffix(message, "\n"), ":")[1], ",")
-	helpers.DebugLog("NAMESPACES:", namespaces)
-	NS = namespaces
-	controller.HaveNamespacesBeenDelivered(true)
+	indexes := strings.Split(strings.Split(strings.TrimSuffix(message, "\n"), ":")[1], ",")
+	helpers.DebugLog("Indexes:", indexes)
+	c.Indexes = indexes
+	controller.HaveIndexesBeenDelivered(true)
 
 	// STEP 8
 	// sending host data
@@ -375,7 +371,7 @@ func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err er
 }
 func ConnectToControllers(controllers string, tag string, collector *Collector) {
 	for _, v := range strings.Split(controllers, ",") {
-		controller := &Controller{Address: v, Active: false, HasListener: false, NSDelivered: false}
+		controller := &Controller{Address: v, Active: false, HasListener: false, IndexesDelivered: false}
 		collector.AddController(controller)
 
 		helpers.DebugLog("Connecting to:", v)

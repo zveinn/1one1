@@ -186,6 +186,7 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 }
 func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 	reader := bufio.NewReader(collector.Conn)
+	// TODO: move all parsing into go routine ?
 	for {
 		// log.Println("loop one!")
 		controlBytes := make([]byte, 3)
@@ -210,6 +211,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		// ParseDataPoint(data)
 
 		go controller.parseIncomingData(collector.TAG, data, int(controlBytes[2]))
+
 	}
 
 }
@@ -281,14 +283,14 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 	LiveBuffer.Map[dp.Tag]["meow"][timestamp] = append(LiveBuffer.Map[dp.Tag]["meow"][timestamp], dp.Value)
 	LiveBuffer.Mux.Unlock()
 	//
-	// log.Println(LiveBuffer.Map)
-	// for _, v := range LiveBuffer.Map {
-	// 	for _, iv := range v {
-	// 		for iii, iiv := range iv {
-	// 			log.Println("A Record:", iii, iiv)
-	// 		}
-	// 	}
-	// }
+	log.Println(LiveBuffer.Map)
+	for _, v := range LiveBuffer.Map {
+		for _, iv := range v {
+			for iii, iiv := range iv {
+				log.Println("A Record:", iii, iiv)
+			}
+		}
+	}
 }
 
 // func (c *Controller) WriteBufferToFile() {

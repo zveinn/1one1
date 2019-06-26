@@ -110,6 +110,7 @@ type Config struct {
 	// Rate in milliseconds
 	UpdateRate   int
 	wantsUpdates bool
+	Indexes      []int
 }
 
 type Blink struct {
