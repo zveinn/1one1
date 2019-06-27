@@ -79,7 +79,7 @@ func CollectDynamicData() []byte {
 }
 func GetStaticBasePoint() string {
 	History.StaticBasePoint = &StaticPoint{}
-	collectNetworkInterfaces(History.StaticBasePoint)
+	collectNetworkStats(History.StaticBasePoint)
 	collectStaticHostData(History.StaticBasePoint)
 	var data string
 	data = data + History.StaticBasePoint.HostStatic.GetFormattedString() + ";"
@@ -90,7 +90,7 @@ func GetStaticBasePoint() string {
 
 func GetStaticDataPoint() string {
 	History.StaticUpdatePoint = &StaticPoint{}
-	collectNetworkInterfaces(History.StaticUpdatePoint)
+	collectNetworkStats(History.StaticUpdatePoint)
 	collectStaticHostData(History.StaticUpdatePoint)
 	var data string
 	data = data + History.StaticUpdatePoint.HostStatic.GetFormattedString() + ";"

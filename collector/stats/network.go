@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	gonet "github.com/shirou/gopsutil/net"
 	"github.com/zkynetio/lynx/helpers"
 )
 
@@ -48,11 +49,63 @@ type NetworkStatic struct {
 	HardwareAddress    string
 	Addresses          []string
 	MulticastAddresses []string
-	Flags              uint
+	Flags              string
 	MTU                int
 	Index              int
 }
 
+func collectNetworkStats(sp *StaticPoint) {
+	netIF, err := gonet.Interfaces()
+	NetworkStaticList := make(map[string]*NetworkStatic)
+	helpers.PanicX(err)
+	for _, v := range netIF {
+
+		var networkAddressLis []string
+
+		for _, av := range v.Addrs {
+			networkAddressLis = append(networkAddressLis, av.String())
+		}
+
+		NetworkStaticList[v.Name] = &NetworkStatic{
+			Name:            v.Name,
+			HardwareAddress: v.HardwareAddr,
+			Addresses:       networkAddressLis,
+			Flags:           strings.Join(v.Flags, ","),
+			MTU:             v.MTU,
+		}
+	}
+	sp.NetworkStatic = NetworkStaticList
+}
+func collectNetworkData() map[string]*NetworkInterface {
+
+	netstuff, err := gonet.IOCounters(true)
+
+	helpers.PanicX(err)
+	NIFL := make(map[string]*NetworkInterface)
+	var NIF *NetworkInterface
+	for _, v := range netstuff {
+
+		NIF = &NetworkInterface{
+			Name: v.Name,
+			IN:   &IN{},
+			OUT:  &OUT{},
+		}
+		// in
+		NIF.IN.Bytes = float64(v.BytesRecv)
+		NIF.IN.Dropped = float64(v.Dropin)
+		NIF.IN.Errors = float64(v.Errin)
+		NIF.IN.Fifo = float64(v.Fifoin)
+		NIF.IN.Packets = float64(v.PacketsRecv)
+		// out
+		NIF.OUT.Bytes = float64(v.BytesSent)
+		NIF.OUT.Dropped = float64(v.Dropout)
+		NIF.OUT.Errors = float64(v.Errout)
+		NIF.OUT.Fifo = float64(v.Fifoout)
+		NIF.OUT.Packets = float64(v.PacketsSent)
+		NIFL[v.Name] = NIF
+	}
+	return NIFL
+}
 func collectNetworkInterfaces(sp *StaticPoint) {
 	interfStat, err := net.Interfaces()
 	helpers.PanicX(err)
@@ -78,9 +131,9 @@ func collectNetworkInterfaces(sp *StaticPoint) {
 			HardwareAddress:    nif.HardwareAddr.String(),
 			Addresses:          networkAddressLis,
 			MulticastAddresses: multiAddressList,
-			Flags:              uint(nif.Flags),
-			MTU:                nif.MTU,
-			Index:              nif.Index,
+			// Flags:              uint(nif.Flags),
+			MTU:   nif.MTU,
+			Index: nif.Index,
 		}
 		NetworkStaticList[nif.Name] = NetworkStaticPoint
 	}
@@ -94,17 +147,18 @@ func getFormattedStringForInterfaces(nsl map[string]*NetworkStatic) string {
 	for name, nif := range nsl {
 		composition = append(composition, "N||"+name)
 		composition = append(composition, ""+strings.Join(nif.Addresses, ","))
-		composition = append(composition, ""+strings.Join(nif.MulticastAddresses, ","))
+		// composition = append(composition, ""+strings.Join(nif.MulticastAddresses, ","))
 		composition = append(composition, ""+nif.HardwareAddress)
-		composition = append(composition, ""+strconv.Itoa(int(nif.Flags)))
-		composition = append(composition, ""+strconv.Itoa(nif.Index))
+		composition = append(composition, ""+nif.Flags)
+		// composition = append(composition, ""+strconv.Itoa(nif.Index))
 		composition = append(composition, ""+strconv.Itoa(nif.MTU))
 	}
 	return strings.Join(composition, ",")
 }
 
 func collectNetworkDownloadAndUpload(dp *DynamicPoint) {
-	networkInterfaces := getAllInterfacesDownloadAndUploadStats()
+	// networkInterfaces := getAllInterfacesDownloadAndUploadStats()
+	networkInterfaces := collectNetworkData()
 	dp.NetworkDynamic = &NetworkDynamic{Interfaces: networkInterfaces}
 }
 func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {

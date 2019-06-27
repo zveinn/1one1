@@ -285,10 +285,10 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 
 	// tm := time.Unix(0, int64(timestamp))
 	// fmt.Println(tm.Format(time.RFC3339))
-
-	log.Println("Data from:", dp.Tag)
+	//
+	// log.Println("Data from:", dp.Tag)
 	// log.Println(dp.Value[8:])
-	// ParseDataPoint(dp.Value[8:])
+	ParseDataPoint(dp.Value[8:])
 	// for _, v := range dp.Value {
 	if LiveBuffer.Map[dp.Tag] == nil {
 		LiveBuffer.Map[dp.Tag] = make(map[string]map[uint64][]byte)

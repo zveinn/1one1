@@ -58,14 +58,7 @@ func (uis *UIServer) Start(watcherChannel chan int) {
 
 	http.HandleFunc("/", uis.wsHandler)
 	panic(http.ListenAndServe(uis.Settings.UIIP+":"+uis.Settings.UIPORT, nil))
-	// helpers.DebugLog("ui listening on:", ui.Settings.UIIP+":"+ui.Settings.UIPORT)
-	// ln, err := net.Listen("tcp", ui.Settings.UIIP+":"+ui.Settings.UIPORT)
-	// helpers.PanicX(err)
-	// for {
-	// 	conn, err := ln.Accept()
-	// 	helpers.PanicX(err)
 
-	// }
 }
 
 func (uis *UIServer) wsHandler(w http.ResponseWriter, r *http.Request) {
