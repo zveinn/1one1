@@ -2,6 +2,7 @@ package stats
 
 import (
 	"log"
+	"strings"
 )
 
 var History *HistoryBuffer
@@ -59,7 +60,7 @@ func CollectBasePoint() []byte {
 	return theBytes
 }
 
-func CollectDynamicData() []byte {
+func CollectDynamicData(indexes string) []byte {
 	History.DynamicUpdatePoint = &DynamicPoint{}
 	collectDiskDynamic(History.DynamicUpdatePoint)
 	collectLoad(History.DynamicUpdatePoint)
@@ -68,8 +69,9 @@ func CollectDynamicData() []byte {
 	collectNetworkDownloadAndUpload(History.DynamicUpdatePoint)
 	var theBytes []byte
 	// THIS ORDER MATTERS.. DO NOT CHANGE!
-	// if
-	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
+	if strings.Contains(indexes, "1") {
+		theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
+	}
 	theBytes = append(theBytes, History.DynamicUpdatePoint.MemoryDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.EntropyDynamic.GetFormattedBytes(false)...)
