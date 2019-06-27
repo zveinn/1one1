@@ -156,6 +156,7 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 		time.Sleep(time.Duration(collector.MaintainerInterval) * time.Second)
 		//helpers.DebugLog("5 second controller maintnance starting ...")
 		for _, controller := range collector.Controllers {
+			log.Println("maintaining controller:", controller)
 			if controller.Active {
 				continue
 			}
@@ -243,6 +244,9 @@ func (c *Controller) Setconnection(conn net.Conn) {
 
 func (c *Controller) OpenSendChannel() {
 	defer func() {
+		if r := recover(); r != nil {
+			log.Println("recovered inside OpenSendChannel()")
+		}
 		helpers.DebugLog("Closing send loop to controller", c.Address)
 		c.ChangeActiveStatus(false)
 		close(c.Send)
@@ -329,7 +333,8 @@ func ConnectToControllers(controllers string, tag string, collector *Collector) 
 		helpers.DebugLog("Connecting to:", v)
 		if err := collector.dialAndHandshake(controller, tag); err != nil {
 			helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
-			collector.RemoveController(controller)
+			// TODO: make sure this won't hurt functionality later on...
+			// collector.RemoveController(controller)
 			continue
 		}
 		helpers.DebugLog("Connected to:", controller.Address)
