@@ -2,7 +2,6 @@ package stats
 
 import (
 	"log"
-	"strings"
 )
 
 var History *HistoryBuffer
@@ -33,13 +32,15 @@ type HistoryBuffer struct {
 	DynamicUpdatePoint         *DynamicPoint
 	DynamicBasePoint           *DynamicPoint
 
-	StaticBasePoint   *StaticPoint
-	StaticUpdatePoint *StaticPoint
+	StaticPreviousUpdatePoint *StaticPoint
+	StaticBasePoint           *StaticPoint
+	StaticUpdatePoint         *StaticPoint
 }
 
 func InitStats() {
 	History = &HistoryBuffer{}
 }
+
 func CollectBasePoint() []byte {
 	log.Println("base point !")
 	History.DynamicBasePoint = &DynamicPoint{}
@@ -60,7 +61,7 @@ func CollectBasePoint() []byte {
 	return theBytes
 }
 
-func CollectDynamicData(indexes string) []byte {
+func CollectDynamicData() []byte {
 	History.DynamicUpdatePoint = &DynamicPoint{}
 	collectDiskDynamic(History.DynamicUpdatePoint)
 	collectLoad(History.DynamicUpdatePoint)
@@ -69,9 +70,7 @@ func CollectDynamicData(indexes string) []byte {
 	collectNetworkDownloadAndUpload(History.DynamicUpdatePoint)
 	var theBytes []byte
 	// THIS ORDER MATTERS.. DO NOT CHANGE!
-	if strings.Contains(indexes, "1") {
-		theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
-	}
+	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.MemoryDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.EntropyDynamic.GetFormattedBytes(false)...)
@@ -86,6 +85,7 @@ func GetStaticBasePoint() string {
 	var data string
 	data = data + History.StaticBasePoint.HostStatic.GetFormattedString() + ";"
 	data = data + getFormattedStringForInterfaces(History.StaticBasePoint.NetworkStatic) + ";"
+	History.StaticPreviousUpdatePoint = History.StaticUpdatePoint
 	log.Println(data)
 	return data
 }
@@ -98,5 +98,20 @@ func GetStaticDataPoint() string {
 	data = data + History.StaticUpdatePoint.HostStatic.GetFormattedString() + ";"
 	data = data + getFormattedStringForInterfaces(History.StaticUpdatePoint.NetworkStatic) + ";"
 	log.Println(data)
+	History.StaticPreviousUpdatePoint = History.StaticUpdatePoint
 	return data
+}
+
+func CheckStaticDataForChanges() string {
+	// TODO: find a way to do a deep compare on structs
+	// --- maybe you can do this with reflect
+	// TODO: send only the changed parts..
+	var hasChanged bool
+	if History.StaticUpdatePoint.HostID != History.StaticBasePoint.HostID {
+		log.Println("static data change !")
+		hasChanged = true
+	}
+
+	log.Println(hasChanged)
+	return ""
 }

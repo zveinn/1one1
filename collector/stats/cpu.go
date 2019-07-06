@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 	"github.com/zkynetio/lynx/helpers"
 )
@@ -15,8 +14,6 @@ func getProcesses() {
 	helpers.PanicX(err)
 	//log.Println(ps)
 
-	netstuff, err := net.IOCounters(true)
-	log.Println(netstuff, err)
 	// for i, v := range netstuff {
 	// }
 	// select an invdividual process by id

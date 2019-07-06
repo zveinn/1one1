@@ -12,6 +12,7 @@ type DiskStatic struct {
 	FSType string
 }
 type DiskDynamic struct {
+	Total          uint64
 	Free           uint64
 	Used           uint64
 	UsedPercentage float64
@@ -26,7 +27,8 @@ func collectDiskDynamic(dp *DynamicPoint) {
 	helpers.PanicX(err)
 
 	dp.DiskDynamic = &DiskDynamic{
-		//Total:          diskStat.Total,
+		Total: diskStat.Total,
+
 		Free:           diskStat.Free,
 		Used:           diskStat.Used,
 		UsedPercentage: diskStat.UsedPercent,
@@ -43,6 +45,7 @@ func (d *DiskDynamic) GetFormattedBytes(basePoint bool) []byte {
 
 	base := History.DynamicBasePoint.DiskDynamic
 	if basePoint {
+		base.ValueList = append(base.ValueList, int64(base.Total))
 		base.ValueList = append(base.ValueList, int64(base.Free))
 		base.ValueList = append(base.ValueList, int64(base.Used))
 		base.ValueList = append(base.ValueList, int64(base.INodesTotal))
@@ -52,6 +55,7 @@ func (d *DiskDynamic) GetFormattedBytes(basePoint bool) []byte {
 		return helpers.WriteValueList(d.ValueList, "")
 	}
 	prev := History.DynamicPreviousUpdatePoint.DiskDynamic
+	d.ValueList = append(d.ValueList, int64(d.Total))
 	d.ValueList = append(d.ValueList, int64(d.Free))
 	d.ValueList = append(d.ValueList, int64(d.Used))
 	d.ValueList = append(d.ValueList, int64(d.INodesTotal))

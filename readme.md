@@ -27,7 +27,30 @@
      
 
 
-# handshake
-1. ui sends config and is ready to receive
-2. controller find nearest basepoint and starts streaming.
-3. 
+# UI stuff
+- handshake 
+     - To controller: config
+     - From controller: datapoints
+
+- dp format ?
+ - index:value ?
+ - as json? or as binary ?
+
+# Data point conversions
+1. from collector: index/index/value = type index/position index/ value
+2. at controller for UI: index.index
+
+
+# Size
+- a representation of the amount of resources available on a machine
+
+# luminocity
+- how much of the machines resources are being used
+
+# how to do groups
+1. Get XYZ index from user
+
+# alarms
+TODO: 
+1. Add to disk
+2. ????

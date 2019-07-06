@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"log"
 )
 
 func getData(headerValue int, data []byte, valuePointer int) (index, size int, value int64) {
 	index, size = findOrderAndSize(headerValue)
-	// log.Println("size/index", size, index)
 	binaryValue := data[valuePointer+1 : valuePointer+size]
 	postOrNeg := data[valuePointer]
 
@@ -43,25 +40,9 @@ func getData(headerValue int, data []byte, valuePointer int) (index, size int, v
 	}
 	return index, size, int64(value)
 }
-func parseSection(data []byte, previousEndingIndex int) (endIndex int) {
+func GetNetworkDataFromSection(MainIndex int, data []byte, previousEndingIndex int) (endIndex int, dpl []*ParsedDataPoint) {
 	if data[previousEndingIndex] == 0 {
-		// log.Println("No data in section")
-		return previousEndingIndex + 1
-	}
-	currentValueIndex := previousEndingIndex + int(data[previousEndingIndex]) + 1
-	headerLength := int(data[previousEndingIndex])
-	for i := 1; i <= headerLength; i++ {
-		index, size, value := getData(int(data[previousEndingIndex+i]), data, currentValueIndex)
-		log.Println("index/size", index, "/", size, "value: ", value)
-		currentValueIndex = currentValueIndex + size
-		endIndex = currentValueIndex
-	}
-	return
-}
-func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int) {
-	if data[previousEndingIndex] == 0 {
-		// log.Println("No data in network section")
-		return previousEndingIndex + 1
+		return previousEndingIndex + 1, nil
 	}
 	numberOfinterfaces := int(data[previousEndingIndex])
 	currentPointer := previousEndingIndex + 1
@@ -70,16 +51,20 @@ func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int)
 		currentPointer = currentPointer + 1
 		currentHeaderPointer := currentPointer
 		currentPointer = currentPointer + currentHeaderLength
+		var iftag string
 		for ii := 1; ii <= currentHeaderLength; ii++ {
-
+			dp := &ParsedDataPoint{}
 			if ii == 1 {
 				value := string(data[currentPointer : currentPointer+int(data[currentHeaderPointer])])
-				log.Println("INTERFACE:", value, "  ///  ", data[currentPointer:currentPointer+int(data[currentHeaderPointer])])
+				iftag = value
 				currentPointer = currentPointer + int(data[currentHeaderPointer])
 				currentHeaderPointer++
 			} else {
 				index, size, value := getData(int(data[currentHeaderPointer]), data, currentPointer)
-				log.Println("index/size", index, "/", size, "value: ", value)
+				dp.Tag = iftag
+				dp.Value = value
+				dp.SubIndex = index
+				dpl = append(dpl, dp)
 				currentPointer = currentPointer + size
 				currentHeaderPointer++
 			}
@@ -88,41 +73,39 @@ func parseNetworkingSection(data []byte, previousEndingIndex int) (endIndex int)
 	endIndex = currentPointer
 	return
 }
-func ParseDataPoint(data []byte) {
-	// log.Pri
-	// log.Println(data)
-	// log.Println("length of original:", len(data))
-	var b bytes.Buffer
-	w := zlib.NewWriter(&b)
-	w.Write(data)
-	w.Close()
-	// log.Println(b)
-	log.Println("length of zlib:", b.Len())
+func GetDataFromSection(MainIndex int, data []byte, previousEndingIndex int) (endIndex int, dpl []*ParsedDataPoint) {
+	if data[previousEndingIndex] == 0 {
+		return previousEndingIndex + 1, nil
+	}
+	currentValueIndex := previousEndingIndex + int(data[previousEndingIndex]) + 1
+	headerLength := int(data[previousEndingIndex])
 
-	var bx bytes.Buffer
-	w = zlib.NewWriter(&bx)
-	w.Write(data)
-	w.Close()
-	// log.Println(bx)
-	log.Println("length of flate:", bx.Len())
-
-	log.Println("DISK:")
-	diskEndIndex := parseSection(data, 0)
-	// os.Exit(1)
-	log.Println("MEMORY:")
-	// log.Println("disk end index:", diskEndIndex)
-	memoryEndIndex := parseSection(data, diskEndIndex)
-	// memoryEndIndex = 0
-	log.Println("LOAD:")
-	loadEndIndex := parseSection(data, memoryEndIndex)
-	log.Println("ENTROPY:")
-	entropyEndIndex := parseSection(data, loadEndIndex)
-
-	log.Println("NEWORKING:")
-	_ = parseNetworkingSection(data, entropyEndIndex)
-	// log.Println(networkEndIndex)
-	// os.Exit(1)
-
+	for i := 1; i <= headerLength; i++ {
+		index, size, value := getData(int(data[previousEndingIndex+i]), data, currentValueIndex)
+		dpl = append(dpl, &ParsedDataPoint{Index: MainIndex, SubIndex: index, Value: value})
+		currentValueIndex = currentValueIndex + size
+		endIndex = currentValueIndex
+	}
+	return
+}
+func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
+	dpv = &ParsedDataPointValues{}
+	// DiskValue := &Index{Tag: "disk", Index: 1}
+	diskEndIndex, DiskValue := GetDataFromSection(1, data, 0)
+	dpv.Values = append(dpv.Values, DiskValue...)
+	// MemoryValue := &Index{Tag: "memory", Index: 2}
+	memoryEndIndex, MemoryValue := GetDataFromSection(2, data, diskEndIndex)
+	dpv.Values = append(dpv.Values, MemoryValue...)
+	// LoadValue := &Index{Tag: "load", Index: 3}
+	loadEndIndex, LoadValue := GetDataFromSection(3, data, memoryEndIndex)
+	dpv.Values = append(dpv.Values, LoadValue...)
+	// EntropyValue := &Index{Tag: "entropy", Index: 4}
+	entropyEndIndex, EntropyValue := GetDataFromSection(4, data, loadEndIndex)
+	dpv.Values = append(dpv.Values, EntropyValue...)
+	// NetworkValue := &Index{Tag: "network", Index: 5}
+	_, NetworkValue := GetNetworkDataFromSection(5, data, entropyEndIndex)
+	dpv.Values = append(dpv.Values, NetworkValue...)
+	return
 }
 func findOrderAndSize(data int) (index int, size int) {
 

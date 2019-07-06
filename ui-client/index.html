@@ -11,13 +11,27 @@
 </body>
 <script>
     let socket = new WebSocket("ws:127.0.0.1:7781");
-
+    // datapoint = {index:number, value:number}
+var datapoints = []
+var config = {
+  X: {"normalize":false, "index":"disk.free"},
+  Y: {"normalize":true, "index":"disk.free"},
+  Z: {"normalize":false, "index":"disk.free"},
+  Size: {"normalize":false, "index":"disk.free"},
+  Luminocity: {"normalize":false, "index":"disk.free"},
+  Blink: {"normalize":false, "index":"disk.free"},
+  UpdateRate: 1000,
+  WantsUpdates: true,
+}
 socket.onopen = function(e) {
   console.log("[open] Connection established, send -> server");
+ socket.send(JSON.stringify(config))
 };
 
 socket.onmessage = function(event) {
   console.log(`[message] Data received: ${event.data} <- server`);
+  var dpc = JSON.parse(event.data)
+  console.log(dpc)
 };
 
 socket.onclose = function(event) {

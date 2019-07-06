@@ -26,7 +26,7 @@ func main() {
 	UIServer := &UIServer{
 		Settings:   Settings,
 		ClientList: make(map[string]*UI),
-		DPChan:     make(chan DataPoint, 1000000),
+		DPChan:     make(chan ParsedCollection, 1000000),
 	}
 	go UIServer.ShipToUIS()
 	controller := Controller{
@@ -43,6 +43,7 @@ func main() {
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
+	go UIServer.ParseDataPoints()
 	watcherChannel := make(chan int)
 
 	go UIServer.Start(watcherChannel)
@@ -108,6 +109,14 @@ type Collector struct {
 	Conn        net.Conn
 	LastCheckin time.Time
 	SendChannel chan string
+	Stats       *CollectorStats
+}
+type CollectorStats struct {
+	Host              string
+	AvailableDisk     int64
+	AvailableMemory   int64
+	AvalableBandwidth int64
+	// todo.. add more max values
 }
 
 func (c *Controller) AddCollector(TAG string, collector *Collector) error {
@@ -160,6 +169,10 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	connectCollector(&Collector{
 		LastCheckin: time.Now(),
 		Conn:        conn,
+		Stats: &CollectorStats{
+			// TODO, get from collector
+			AvalableBandwidth: 1250000000,
+		},
 	}, controller, message)
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
@@ -245,9 +258,26 @@ func (c *Controller) parseIncomingData(tag string, data []byte, controlByte int)
 func (c *Controller) sendToUIS(tag string, data []byte) {
 
 	//helpers.DebugLog("DATA:", msg)
-	c.UI.DPChan <- DataPoint{
-		Value: data,
-		Tag:   tag,
+	parsedPoint := ParseDataPoint(data[8:], tag)
+	c.UI.DPChan <- ParsedCollection{
+		DPS: parsedPoint.Values,
+		Tag: tag,
+	}
+	log.Println("parsed collections")
+	for _, v := range parsedPoint.Values {
+		if v.Index == 1 && v.SubIndex == 0 {
+			c.mutex.Lock()
+			c.Collectors[tag].Stats.AvailableDisk = v.Value
+			c.mutex.Unlock()
+			log.Println("DISK TOTAL:", v.Value)
+		}
+		if v.Index == 2 && v.SubIndex == 0 {
+			c.mutex.Lock()
+			c.Collectors[tag].Stats.AvailableMemory = v.Value
+			c.mutex.Unlock()
+			log.Println("Memory TOTAL:", v.Value)
+		}
+		// log.Println("Main:", v.Index, "sub:", v.SubIndex, "vale:", v.Value)
 	}
 }
 func (c *Controller) EngageBufferPipe() {
@@ -288,7 +318,7 @@ func (c *Controller) ParseDataPointIntoMemoryMap(dp *DataPoint) {
 	//
 	// log.Println("Data from:", dp.Tag)
 	// log.Println(dp.Value[8:])
-	ParseDataPoint(dp.Value[8:])
+	// ParseDataPoint(dp.Value[8:])
 	// for _, v := range dp.Value {
 	if LiveBuffer.Map[dp.Tag] == nil {
 		LiveBuffer.Map[dp.Tag] = make(map[string]map[uint64][]byte)

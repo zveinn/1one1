@@ -26,7 +26,6 @@ type Collector struct {
 	mutex              sync.Mutex
 	PointMap           map[int][]byte
 	StaticMap          map[int]string
-	Indexes            string
 	LastBasePointIndex int
 	CurrentPointIndex  int
 	CurrentStaticIndex int
@@ -189,11 +188,15 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		var data []byte
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 		if count%60 == 0 {
+			staticData := stats.CheckStaticDataForChanges()
+			if staticData != "" {
+				log.Println("do something with static data !")
+			}
 			data = stats.CollectBasePoint()
 			collector.LastBasePointIndex = count
 			count = collector.AddDataPoint(data)
 		} else {
-			data = stats.CollectDynamicData(collector.Indexes)
+			data = stats.CollectDynamicData()
 			count = collector.AddDataPoint(data)
 		}
 

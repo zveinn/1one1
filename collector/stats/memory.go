@@ -10,6 +10,7 @@ type MemoryStatic struct {
 	SwapTotal uint64
 }
 type MemoryDynamic struct {
+	Total      uint64
 	Used       uint64
 	Free       uint64
 	Shared     uint64
@@ -28,6 +29,7 @@ func collectMemory(dp *DynamicPoint) {
 
 	memoryDynamicPoint := MemoryDynamic{}
 	//memoryDynamicPoint.Total = vmStat.Total
+	memoryDynamicPoint.Total = vmStat.Total
 	memoryDynamicPoint.Available = vmStat.Available
 	memoryDynamicPoint.Used = vmStat.Used
 	memoryDynamicPoint.Free = vmStat.Free
@@ -45,6 +47,7 @@ func collectMemory(dp *DynamicPoint) {
 func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
 	if basePoint {
 		base := History.DynamicBasePoint.MemoryDynamic
+		base.ValueList = append(base.ValueList, int64(base.Total))
 		base.ValueList = append(base.ValueList, int64(base.Free))
 		base.ValueList = append(base.ValueList, int64(base.Used))
 		base.ValueList = append(base.ValueList, int64(base.Available))
@@ -58,6 +61,7 @@ func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
 
 	base := History.DynamicBasePoint.MemoryDynamic
 	prev := History.DynamicPreviousUpdatePoint.MemoryDynamic
+	d.ValueList = append(d.ValueList, int64(d.Total))
 	d.ValueList = append(d.ValueList, int64(d.Free))
 	d.ValueList = append(d.ValueList, int64(d.Used))
 	d.ValueList = append(d.ValueList, int64(d.Available))
