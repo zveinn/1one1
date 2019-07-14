@@ -9,12 +9,13 @@ var History *HistoryBuffer
 const HighestHistoryIndex = 2
 
 type DynamicPoint struct {
-	MemoryDynamic  *MemoryDynamic
-	LoadDynamic    *LoadDynamic
-	DiskDynamic    *DiskDynamic
-	NetworkDynamic *NetworkDynamic
-	EntropyDynamic *EntropyDynamic
-	CPU            string
+	MemoryDynamic    *MemoryDynamic
+	LoadDynamic      *LoadDynamic
+	DiskDynamic      *DiskDynamic
+	NetworkDynamic   *NetworkDynamic
+	EntropyDynamic   *EntropyDynamic
+	ProcessorDynamic *ProcessorDynamic
+	CPU              string
 	//Host      string
 	General   string
 	Load1MIN  float64
@@ -50,6 +51,7 @@ func CollectBasePoint() []byte {
 	collectMemory(History.DynamicBasePoint)
 	collectEntropy(History.DynamicBasePoint)
 	collectNetworkDownloadAndUpload(History.DynamicBasePoint)
+	collectCPU(History.DynamicBasePoint)
 	var theBytes []byte
 	// THIS ORDER MATTERS.. DO NOT CHANGE
 	theBytes = append(theBytes, History.DynamicBasePoint.DiskDynamic.GetFormattedBytes(true)...)
@@ -57,6 +59,7 @@ func CollectBasePoint() []byte {
 	theBytes = append(theBytes, History.DynamicBasePoint.LoadDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.EntropyDynamic.GetFormattedBytes(true)...)
 	theBytes = append(theBytes, History.DynamicBasePoint.NetworkDynamic.GetFormattedBytes(true)...)
+	theBytes = append(theBytes, History.DynamicBasePoint.ProcessorDynamic.GetFormattedBytes(true)...)
 	History.DynamicPreviousUpdatePoint = History.DynamicBasePoint
 	return theBytes
 }
@@ -68,6 +71,7 @@ func CollectDynamicData() []byte {
 	collectMemory(History.DynamicUpdatePoint)
 	collectEntropy(History.DynamicUpdatePoint)
 	collectNetworkDownloadAndUpload(History.DynamicUpdatePoint)
+	collectCPU(History.DynamicUpdatePoint)
 	var theBytes []byte
 	// THIS ORDER MATTERS.. DO NOT CHANGE!
 	theBytes = append(theBytes, History.DynamicUpdatePoint.DiskDynamic.GetFormattedBytes(false)...)
@@ -75,6 +79,7 @@ func CollectDynamicData() []byte {
 	theBytes = append(theBytes, History.DynamicUpdatePoint.LoadDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.EntropyDynamic.GetFormattedBytes(false)...)
 	theBytes = append(theBytes, History.DynamicUpdatePoint.NetworkDynamic.GetFormattedBytes(false)...)
+	theBytes = append(theBytes, History.DynamicUpdatePoint.ProcessorDynamic.GetFormattedBytes(false)...)
 	History.DynamicPreviousUpdatePoint = History.DynamicUpdatePoint
 	return theBytes
 }
@@ -86,7 +91,7 @@ func GetStaticBasePoint() string {
 	data = data + History.StaticBasePoint.HostStatic.GetFormattedString() + ";"
 	data = data + getFormattedStringForInterfaces(History.StaticBasePoint.NetworkStatic) + ";"
 	History.StaticPreviousUpdatePoint = History.StaticUpdatePoint
-	log.Println(data)
+	// log.Println(data)
 	return data
 }
 
@@ -97,7 +102,7 @@ func GetStaticDataPoint() string {
 	var data string
 	data = data + History.StaticUpdatePoint.HostStatic.GetFormattedString() + ";"
 	data = data + getFormattedStringForInterfaces(History.StaticUpdatePoint.NetworkStatic) + ";"
-	log.Println(data)
+	// log.Println(data)
 	History.StaticPreviousUpdatePoint = History.StaticUpdatePoint
 	return data
 }
@@ -106,6 +111,9 @@ func CheckStaticDataForChanges() string {
 	// TODO: find a way to do a deep compare on structs
 	// --- maybe you can do this with reflect
 	// TODO: send only the changed parts..
+	if History.StaticUpdatePoint == nil {
+		return ""
+	}
 	var hasChanged bool
 	if History.StaticUpdatePoint.HostID != History.StaticBasePoint.HostID {
 		log.Println("static data change !")

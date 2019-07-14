@@ -45,8 +45,8 @@ func collectMemory(dp *DynamicPoint) {
 }
 
 func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
+	base := History.DynamicBasePoint.MemoryDynamic
 	if basePoint {
-		base := History.DynamicBasePoint.MemoryDynamic
 		base.ValueList = append(base.ValueList, int64(base.Total))
 		base.ValueList = append(base.ValueList, int64(base.Free))
 		base.ValueList = append(base.ValueList, int64(base.Used))
@@ -56,10 +56,9 @@ func (d *MemoryDynamic) GetFormattedBytes(basePoint bool) []byte {
 		base.ValueList = append(base.ValueList, int64(base.SwapFree))
 		base.ValueList = append(base.ValueList, int64(base.SwapCached))
 		base.ValueList = append(base.ValueList, int64(base.Percentage))
-		return helpers.WriteValueList(d.ValueList, "")
+		return helpers.WriteValueList(base.ValueList, "")
 	}
 
-	base := History.DynamicBasePoint.MemoryDynamic
 	prev := History.DynamicPreviousUpdatePoint.MemoryDynamic
 	d.ValueList = append(d.ValueList, int64(d.Total))
 	d.ValueList = append(d.ValueList, int64(d.Free))

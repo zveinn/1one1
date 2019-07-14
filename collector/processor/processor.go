@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,6 +179,7 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 func (collector *Collector) CollectStats(watcherChannel chan int) {
 	defer func(watcherChannel chan int) {
 		if r := recover(); r != nil {
+			log.Println(string(debug.Stack()))
 			log.Println("collector panic...", r)
 		}
 		watcherChannel <- 1
@@ -187,11 +189,13 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	for {
 		var data []byte
 		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
+		var basePoint bool
 		if count%60 == 0 {
 			staticData := stats.CheckStaticDataForChanges()
 			if staticData != "" {
 				log.Println("do something with static data !")
 			}
+			basePoint = true
 			data = stats.CollectBasePoint()
 			collector.LastBasePointIndex = count
 			count = collector.AddDataPoint(data)
@@ -218,20 +222,32 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		for _, controller := range collector.Controllers {
 			// log.Println("controller", controller.Address, " is active:", controller.Active)
 			if controller.Active {
-				controller.Send <- data
+				controller.SendChannel <- DataPoint{
+					Data:      data,
+					BasePoint: basePoint,
+					Timestamp: time.Now().UnixNano(),
+					Length:    len(data),
+				}
 			}
 		}
 	}
 }
 
 type Controller struct {
-	Address string
-	Active  bool
-	Conn    net.Conn
-	Retry   int
-	mutex   sync.Mutex
-	Send    chan []byte
+	Address     string
+	Active      bool
+	Conn        net.Conn
+	Retry       int
+	mutex       sync.Mutex
+	Send        chan []byte
+	SendChannel chan DataPoint
 	//InactiveSince time.Time
+}
+type DataPoint struct {
+	Data      []byte
+	BasePoint bool
+	Timestamp int64
+	Length    int
 }
 
 func (c *Controller) ChangeActiveStatus(status bool) {
@@ -255,26 +271,30 @@ func (c *Controller) OpenSendChannel() {
 		c.ChangeActiveStatus(false)
 		close(c.Send)
 	}()
-	c.Send = make(chan []byte, 10000)
+	c.SendChannel = make(chan DataPoint, 10000)
 	newbuffer := new(bytes.Buffer)
 	for {
-		data, errx := <-c.Send
+		datapoint, errx := <-c.SendChannel
 		if !errx {
 			break
 		}
 
-		err := binary.Write(newbuffer, binary.LittleEndian, int16(len(data)))
+		err := binary.Write(newbuffer, binary.LittleEndian, int16(datapoint.Length))
 		if err != nil {
 			panic(err)
 		}
-		newbuffer.Write([]byte{102})
-		timestamp := time.Now().UnixNano()
-		err = binary.Write(newbuffer, binary.LittleEndian, int64(timestamp))
+		if datapoint.BasePoint {
+			newbuffer.Write([]byte{101})
+		} else {
+			newbuffer.Write([]byte{102})
+		}
+		// timestamp := time.Now().UnixNano()
+		err = binary.Write(newbuffer, binary.LittleEndian, int64(datapoint.Timestamp))
 		if err != nil {
 			panic(err)
 		}
 
-		newbuffer.Write(data)
+		newbuffer.Write(datapoint.Data)
 
 		// newbuffer = append(newbuffer, data)
 		// helpers.DebugLog("Bytes from pipes:", newbuffer.Bytes())

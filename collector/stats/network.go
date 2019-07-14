@@ -193,7 +193,7 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 			base.ValueList = valueList
 		} else {
 			prev := History.DynamicPreviousUpdatePoint.NetworkDynamic.Interfaces[v.Name]
-			base := History.DynamicPreviousUpdatePoint.NetworkDynamic.Interfaces[v.Name]
+			base := History.DynamicBasePoint.NetworkDynamic.Interfaces[v.Name]
 			v.ValueList = append(v.ValueList, int64(v.IN.Bytes))
 			v.ValueList = append(v.ValueList, int64(v.IN.Packets))
 			v.ValueList = append(v.ValueList, int64(v.IN.Errors))

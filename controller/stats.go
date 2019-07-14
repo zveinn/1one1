@@ -16,21 +16,24 @@ func getData(headerValue int, data []byte, valuePointer int) (index, size int, v
 	} else if size == 3 {
 		value := binary.LittleEndian.Uint16(binaryValue)
 		if postOrNeg == 0 {
-			return index, size, int64(-value)
+			// log.Println("WAS NEGATIVE", -int64(value))
+			return index, size, -int64(value)
 		}
 		return index, size, int64(value)
 
 	} else if size == 5 {
 		value := binary.LittleEndian.Uint32(binaryValue)
 		if postOrNeg == 0 {
-			return index, size, int64(-value)
+			// log.Println("WAS NEGATIVE", -int64(value))
+			return index, size, -int64(value)
 		}
 		return index, size, int64(value)
 
 	} else if size == 9 {
 		value := binary.LittleEndian.Uint64(binaryValue)
 		if postOrNeg == 0 {
-			return index, size, int64(-value)
+			// log.Println("WAS NEGATIVE:", -int64(value))
+			return index, size, -int64(value)
 		}
 		return index, size, int64(value)
 
@@ -62,6 +65,7 @@ func GetNetworkDataFromSection(MainIndex int, data []byte, previousEndingIndex i
 			} else {
 				index, size, value := getData(int(data[currentHeaderPointer]), data, currentPointer)
 				dp.Tag = iftag
+				dp.Index = MainIndex
 				dp.Value = value
 				dp.SubIndex = index
 				dpl = append(dpl, dp)
@@ -90,21 +94,22 @@ func GetDataFromSection(MainIndex int, data []byte, previousEndingIndex int) (en
 }
 func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
 	dpv = &ParsedDataPointValues{}
-	// DiskValue := &Index{Tag: "disk", Index: 1}
 	diskEndIndex, DiskValue := GetDataFromSection(1, data, 0)
 	dpv.Values = append(dpv.Values, DiskValue...)
-	// MemoryValue := &Index{Tag: "memory", Index: 2}
 	memoryEndIndex, MemoryValue := GetDataFromSection(2, data, diskEndIndex)
 	dpv.Values = append(dpv.Values, MemoryValue...)
-	// LoadValue := &Index{Tag: "load", Index: 3}
 	loadEndIndex, LoadValue := GetDataFromSection(3, data, memoryEndIndex)
 	dpv.Values = append(dpv.Values, LoadValue...)
-	// EntropyValue := &Index{Tag: "entropy", Index: 4}
 	entropyEndIndex, EntropyValue := GetDataFromSection(4, data, loadEndIndex)
 	dpv.Values = append(dpv.Values, EntropyValue...)
-	// NetworkValue := &Index{Tag: "network", Index: 5}
-	_, NetworkValue := GetNetworkDataFromSection(5, data, entropyEndIndex)
+	networkEndIndex, NetworkValue := GetNetworkDataFromSection(5, data, entropyEndIndex)
 	dpv.Values = append(dpv.Values, NetworkValue...)
+	_, CPUVaues := GetDataFromSection(6, data, networkEndIndex)
+	dpv.Values = append(dpv.Values, CPUVaues...)
+	// for _, v := range dpv.Values {
+	// 	log.Println(v.Index, v.Value)
+	// }
+	// // log.Println(dpv.Values)
 	return
 }
 func findOrderAndSize(data int) (index int, size int) {

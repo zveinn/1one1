@@ -9,12 +9,15 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/zkynetio/lynx/helpers"
 )
+
+var GlobalController *Controller
 
 func main() {
 	rand.Seed(time.Now().Unix())
@@ -37,9 +40,12 @@ func main() {
 		MinLinesInBufferFile: 10,
 		UI:                   UIServer,
 	}
+	GlobalController = &controller
 
 	LiveBuffer = &Collection{
-		Map: make(map[string]map[string]map[uint64][]byte),
+		Map:               make(map[string]map[string]map[uint64][]byte),
+		CurrentBase:       make(map[string]map[string]int64),
+		CollectorStatsMap: make(map[string]map[string]int64),
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
@@ -86,8 +92,10 @@ type Controller struct {
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
-	Map map[string]map[string]map[uint64][]byte
-	Mux sync.Mutex
+	Map               map[string]map[string]map[uint64][]byte
+	CurrentBase       map[string]map[string]int64
+	CollectorStatsMap map[string]map[string]int64
+	Mux               sync.Mutex
 }
 
 var LiveBuffer *Collection
@@ -116,6 +124,7 @@ type CollectorStats struct {
 	AvailableDisk     int64
 	AvailableMemory   int64
 	AvalableBandwidth int64
+	MaxAvail          map[string]int64
 	// todo.. add more max values
 }
 
@@ -172,6 +181,7 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 		Stats: &CollectorStats{
 			// TODO, get from collector
 			AvalableBandwidth: 1250000000,
+			MaxAvail:          make(map[string]int64),
 		},
 	}, controller, message)
 }
@@ -232,8 +242,8 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		// log.Println("data from read:", data)
 		// ParseDataPoint(data)
 
-		go controller.parseIncomingData(collector.TAG, data, int(controlBytes[2]))
-		go controller.sendToUIS(collector.TAG, data)
+		go controller.saveData(collector.TAG, data, int(controlBytes[2]))
+		go controller.ParseData(collector.TAG, data, int(controlBytes[2]))
 
 	}
 
@@ -246,7 +256,7 @@ type DataPoint struct {
 	ControlByte int
 }
 
-func (c *Controller) parseIncomingData(tag string, data []byte, controlByte int) {
+func (c *Controller) saveData(tag string, data []byte, controlByte int) {
 
 	//helpers.DebugLog("DATA:", msg)
 	c.Buffer <- &DataPoint{
@@ -255,30 +265,34 @@ func (c *Controller) parseIncomingData(tag string, data []byte, controlByte int)
 		ControlByte: controlByte,
 	}
 }
-func (c *Controller) sendToUIS(tag string, data []byte) {
+func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 
 	//helpers.DebugLog("DATA:", msg)
 	parsedPoint := ParseDataPoint(data[8:], tag)
-	c.UI.DPChan <- ParsedCollection{
+	collection := ParsedCollection{
 		DPS: parsedPoint.Values,
 		Tag: tag,
 	}
-	log.Println("parsed collections")
-	for _, v := range parsedPoint.Values {
-		if v.Index == 1 && v.SubIndex == 0 {
-			c.mutex.Lock()
-			c.Collectors[tag].Stats.AvailableDisk = v.Value
-			c.mutex.Unlock()
-			log.Println("DISK TOTAL:", v.Value)
-		}
-		if v.Index == 2 && v.SubIndex == 0 {
-			c.mutex.Lock()
-			c.Collectors[tag].Stats.AvailableMemory = v.Value
-			c.mutex.Unlock()
-			log.Println("Memory TOTAL:", v.Value)
-		}
-		// log.Println("Main:", v.Index, "sub:", v.SubIndex, "vale:", v.Value)
+	if controlByte == 101 {
+		collection.BasePoint = true
+		// LiveBuffer.CurrentBase[tag] = collection
 	}
+	c.UI.DPChan <- collection
+	for _, v := range parsedPoint.Values {
+		if LiveBuffer.CollectorStatsMap[tag] == nil || LiveBuffer.CurrentBase[tag] == nil {
+			LiveBuffer.CollectorStatsMap[tag] = make(map[string]int64)
+			LiveBuffer.CurrentBase[tag] = make(map[string]int64)
+		}
+		statIndex := strconv.Itoa(v.Index) + "." + strconv.Itoa(v.SubIndex)
+		if controlByte == 101 {
+			LiveBuffer.CurrentBase[tag][statIndex] = v.Value
+			LiveBuffer.CollectorStatsMap[tag][statIndex] = v.Value
+		} else {
+			LiveBuffer.CollectorStatsMap[tag][statIndex] = LiveBuffer.CurrentBase[tag][statIndex] + v.Value
+		}
+	}
+	// log.Println(LiveBuffer.CurrentBase[tag]["5.0"], LiveBuffer.CollectorStatsMap[tag]["5.0"])
+	// log.Println(LiveBuffer.CollectorStatsMap)
 }
 func (c *Controller) EngageBufferPipe() {
 

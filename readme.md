@@ -1,14 +1,13 @@
 # Lynx
 
 # TODO 
+## MAKE VALUES POSITIVE WHEN WRITING TO BUFFER IN COLLECTOR
+# add buffer on collector..
+### ALL DISKS!
 ## refactoring
+
 ### add logger !!
-## client UI
-<!-- - 1. put UI on a different port -->
-- 2. add a config for the UI struct
-- 3. design handshake for the UI
-    - this means making a golang UI client to test. 
-- 4. .. see more info in excel sheet.
+
 
 ## controller data queries.. 
 1. look into influx DB for backend? 
@@ -32,9 +31,7 @@
      - To controller: config
      - From controller: datapoints
 
-- dp format ?
- - index:value ?
- - as json? or as binary ?
+
 
 # Data point conversions
 1. from collector: index/index/value = type index/position index/ value
@@ -42,15 +39,16 @@
 
 
 # Size
-- a representation of the amount of resources available on a machine
-
+-? 
 # luminocity
-- how much of the machines resources are being used
+- ?
 
-# how to do groups
-1. Get XYZ index from user
+
 
 # alarms
 TODO: 
 1. Add to disk
 2. ????
+
+
+

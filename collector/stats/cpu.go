@@ -9,6 +9,38 @@ import (
 	"github.com/zkynetio/lynx/helpers"
 )
 
+type ProcessorDynamic struct {
+	Processes      int
+	PercentageUsed float64
+	ValueList      []int64
+}
+
+func collectCPU(dp *DynamicPoint) {
+	cpuStat, err := process.Processes()
+	helpers.PanicX(err)
+	dp.ProcessorDynamic = &ProcessorDynamic{}
+	for _, v := range cpuStat {
+		ps, err := v.CPUPercent()
+		helpers.PanicX(err)
+		dp.ProcessorDynamic.PercentageUsed = dp.ProcessorDynamic.PercentageUsed + ps
+		dp.ProcessorDynamic.Processes++
+	}
+	dp.ProcessorDynamic.PercentageUsed = dp.ProcessorDynamic.PercentageUsed / float64(runtime.NumCPU())
+
+}
+func (p *ProcessorDynamic) GetFormattedBytes(basePoint bool) []byte {
+	base := History.DynamicBasePoint.ProcessorDynamic
+	if basePoint {
+		base.ValueList = append(base.ValueList, int64(base.PercentageUsed))
+		base.ValueList = append(base.ValueList, int64(base.Processes))
+		return helpers.WriteValueList(base.ValueList, "")
+	}
+
+	prev := History.DynamicPreviousUpdatePoint.ProcessorDynamic
+	p.ValueList = append(p.ValueList, int64(p.PercentageUsed))
+	p.ValueList = append(p.ValueList, int64(p.Processes))
+	return helpers.WriteValueList2(p.ValueList, base.ValueList, prev.ValueList, "")
+}
 func getProcesses() {
 	ps, err := process.Processes()
 	helpers.PanicX(err)

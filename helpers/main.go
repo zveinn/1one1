@@ -87,12 +87,14 @@ func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag st
 			value := v - baseValueList[i]
 
 			if value < 0 {
-				value = +value
+				value = abs(value)
 				data = append(data, byte(0))
 			} else {
 				data = append(data, byte(1))
 			}
-			length = WriteIntToBuffer(&buffer, v-baseValueList[i])
+			// log.Println(v, baseValueList[i])
+			log.Println(value)
+			length = WriteIntToBuffer(&buffer, value)
 			length = length + 1
 			data = append(data, buffer.Bytes()...)
 		}
@@ -119,6 +121,10 @@ func WriteValueList2(valueList, baseValueList, preValueList []int64, batchTag st
 
 	// log.Println("formatted bytes", dataAndHeader)
 	return dataAndHeader
+}
+func abs(n int64) int64 {
+	y := n >> 63
+	return ((n * y) - y) - 1
 }
 func WriteValueList(valueList []int64, batchTag string) []byte {
 	var buffer bytes.Buffer

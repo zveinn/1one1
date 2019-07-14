@@ -23,6 +23,7 @@ type DiskDynamic struct {
 }
 
 func collectDiskDynamic(dp *DynamicPoint) {
+	// meow := disk.Partitions()
 	diskStat, err := disk.Usage("/")
 	helpers.PanicX(err)
 
@@ -52,7 +53,7 @@ func (d *DiskDynamic) GetFormattedBytes(basePoint bool) []byte {
 		base.ValueList = append(base.ValueList, int64(base.INodesFree))
 		base.ValueList = append(base.ValueList, int64(base.INodesUsed))
 		base.ValueList = append(base.ValueList, int64(base.UsedPercentage))
-		return helpers.WriteValueList(d.ValueList, "")
+		return helpers.WriteValueList(base.ValueList, "")
 	}
 	prev := History.DynamicPreviousUpdatePoint.DiskDynamic
 	d.ValueList = append(d.ValueList, int64(d.Total))

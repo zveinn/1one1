@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -152,7 +151,8 @@ func (uis *UIServer) ParseDataPoints() {
 		outgoing := &OutgoingData{}
 		for _, v := range newBuffer {
 
-			outgoing.DataPoints = append(outgoing.DataPoints, &v)
+			log.Println(&v)
+			outgoing.DataPoints = append(outgoing.DataPoints, v)
 			// ParseDataPoint(v.Value[8:])
 			// log.Println("ONE DATA POINT:")
 			// for _, v := range parsedValues.Values {
@@ -161,6 +161,8 @@ func (uis *UIServer) ParseDataPoints() {
 			// }
 		}
 
+		log.Println("about to parse")
+		uis.ParseForIndividualUsers(outgoing)
 		// You can do XYZ and Alarms at the same time with channels.
 		// Parse Alarms
 
@@ -173,23 +175,44 @@ func (uis *UIServer) ParseDataPoints() {
 }
 func (uis *UIServer) ParseForIndividualUsers(og *OutgoingData) {
 
-	for _, client := range uis.ClientList {
-		// // inside the client.
-		// grid := &Grid{
-		// 	Point: make(map[int]map[int]map[int]*ParsedDataPoint),
-		// }
-		for _, outgoing := range og.DataPoints {
-			for _, dp := range outgoing.DPS {
-				// z := 0
-				// y := 0
-				// x := 0
-				index := strconv.Itoa(dp.Index) + "." + strconv.Itoa(dp.SubIndex)
-				if index == client.Config.X.Index {
-					// x = math.
-				}
-			}
-		}
+	// log.Println(og)
+	client := Config{
+		X: X{Index: "2.3"},
+		Y: Y{Index: "1.2"},
+		Z: Z{Index: "2.3"},
 	}
+	UI := &UI{
+		Config: client,
+	}
+	uis.ClientList["meow"] = UI
+	// for _, client := range uis.ClientList {
+	// 	// // inside the client.
+	// 	// grid := &Grid{
+	// 	// 	Point: make(map[int]map[int]map[int]*ParsedDataPoint),
+	// 	// }
+	// 	// log.Println(client)
+	// 	for _, outgoing := range og.DataPoints {
+	// 		var x float64
+	// 		var z float64
+	// 		var y float64
+	// 		for _, dp := range outgoing.DPS {
+	// 			// z := 0
+	// 			// y := 0
+	// 			index := strconv.Itoa(dp.Index) + "." + strconv.Itoa(dp.SubIndex)
+	// 			log.Println("index:", index, " config-x:", client.Config.X.Index, "Value:", dp.Value)
+	// 			if index == client.Config.X.Index {
+	// 				x = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
+	// 			}
+	// 			if index == client.Config.Z.Index {
+	// 				z = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
+	// 			}
+	// 			if index == client.Config.Y.Index {
+	// 				y = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
+	// 			}
+	// 		}
+	// 		log.Println("X:", x, "Y:", y, "Z:", z)
+	// 	}
+	// }
 }
 
 type Grid struct {
@@ -199,8 +222,9 @@ type ParsedDataPointValues struct {
 	Values []*ParsedDataPoint
 }
 type ParsedCollection struct {
-	Tag string
-	DPS []*ParsedDataPoint
+	Tag       string
+	DPS       []*ParsedDataPoint
+	BasePoint bool
 }
 type ParsedDataPoint struct {
 	SubIndex int
@@ -212,7 +236,7 @@ type ParsedDataPoint struct {
 type OutgoingData struct {
 	Grid       *Grid
 	Groups     []*Group
-	DataPoints []*ParsedCollection
+	DataPoints []ParsedCollection
 	Alarms     []*ParsedCollection
 }
 type Alarm struct {
