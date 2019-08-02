@@ -286,7 +286,7 @@ func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 		statIndex := strconv.Itoa(v.Index) + "." + strconv.Itoa(v.SubIndex)
 		if controlByte == 101 {
 			LiveBuffer.CurrentBase[tag][statIndex] = v.Value
-			LiveBuffer.CollectorStatsMap[tag][statIndex] = v.Value
+			// LiveBuffer.CollectorStatsMap[tag][statIndex] = v.Value
 		} else {
 			LiveBuffer.CollectorStatsMap[tag][statIndex] = LiveBuffer.CurrentBase[tag][statIndex] + v.Value
 		}

@@ -1,8 +1,11 @@
 # Lynx
 
 # TODO 
-## MAKE VALUES POSITIVE WHEN WRITING TO BUFFER IN COLLECTOR
-# add buffer on collector..
+### We now have a current stats buffer
+- send that buffer on user connect
+- send also static data
+### Make static data buffer
+### finish static data.
 ### ALL DISKS!
 ## refactoring
 
