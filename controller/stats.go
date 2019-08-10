@@ -106,10 +106,10 @@ func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
 	dpv.Values = append(dpv.Values, NetworkValue...)
 	_, CPUVaues := GetDataFromSection(6, data, networkEndIndex)
 	dpv.Values = append(dpv.Values, CPUVaues...)
-	// for _, v := range dpv.Values {
-	// 	log.Println(v.Index, v.Value)
-	// }
-	// // log.Println(dpv.Values)
+	for _, v := range dpv.Values {
+		log.Println(v.Index, v.Value)
+	}
+	// log.Println(dpv.Values)
 	return
 }
 func findOrderAndSize(data int) (index int, size int) {

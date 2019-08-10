@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -166,7 +167,7 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	defer func() {
 		r := recover()
 		if r != nil {
-			helpers.DebugLog("recovered in connection receiver ", r)
+			helpers.DebugLog("recovered in connection receiver ", r, string(debug.Stack()))
 		}
 	}()
 	helpers.DebugLog("Connection from:", conn.RemoteAddr())
@@ -226,21 +227,12 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		if err != nil {
 			panic(err)
 		}
-		// log.Println(controlBytes)
 		length := binary.LittleEndian.Uint16(controlBytes[0:3])
-		// log.Println("Length:", length)
-		// log.Println("control byte:", controlBytes[2])
-		// timestamp := binary.LittleEndian.Uint64(controlBytes[3:])
-
-		// log.Println("timestamp", timestamp, "MS:", (timestamp / 1000000), controlBytes[3:])
-		// +8 for the timestamp at the start of the data
 		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
 			panic(err)
 		}
-		// log.Println("data from read:", data)
-		// ParseDataPoint(data)
 
 		go controller.saveData(collector.TAG, data, int(controlBytes[2]))
 		go controller.ParseData(collector.TAG, data, int(controlBytes[2]))
@@ -267,8 +259,8 @@ func (c *Controller) saveData(tag string, data []byte, controlByte int) {
 }
 func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 
-	//helpers.DebugLog("DATA:", msg)
 	parsedPoint := ParseDataPoint(data[8:], tag)
+	// helpers.DebugLog("DATA:", parsedPoint)
 	collection := ParsedCollection{
 		DPS: parsedPoint.Values,
 		Tag: tag,

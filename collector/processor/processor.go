@@ -216,7 +216,8 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		w := zlib.NewWriter(&b)
 		w.Write(allBytes)
 		w.Close()
-		helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
+		log.Println(data)
+		// helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
 		// continue
 		// log.Println(data)
 		for _, controller := range collector.Controllers {

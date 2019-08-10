@@ -132,6 +132,7 @@ func WriteValueList(valueList []int64, batchTag string) []byte {
 	var headers []byte
 	var dataAndHeader []byte
 	var base int64 = 0
+
 	// log.Println(valueList)
 	for _, v := range valueList {
 		base = base + v
@@ -143,6 +144,7 @@ func WriteValueList(valueList []int64, batchTag string) []byte {
 	// log.Println("value list", valueList, "batch tag:", batchTag)
 	for i, v := range valueList {
 		if v < 0 {
+			v = abs(v)
 			data = append(data, byte(0))
 		} else if v == 0 {
 			// headers = append(headers, []byte{0}...)

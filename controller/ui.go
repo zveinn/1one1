@@ -151,7 +151,7 @@ func (uis *UIServer) ParseDataPoints() {
 		outgoing := &OutgoingData{}
 		for _, v := range newBuffer {
 
-			log.Println(&v)
+			// log.Println(&v)
 			outgoing.DataPoints = append(outgoing.DataPoints, v)
 			// ParseDataPoint(v.Value[8:])
 			// log.Println("ONE DATA POINT:")
