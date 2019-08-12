@@ -269,6 +269,7 @@ func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 		collection.BasePoint = true
 		// LiveBuffer.CurrentBase[tag] = collection
 	}
+	// Send to UIS
 	c.UI.DPChan <- collection
 	for _, v := range parsedPoint.Values {
 		if LiveBuffer.CollectorStatsMap[tag] == nil || LiveBuffer.CurrentBase[tag] == nil {

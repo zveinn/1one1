@@ -55,3 +55,18 @@ TODO:
 
 
 
+# NEW LYNX!
+
+1. normalize everything.
+
+# Two types of data
+1. String
+ - host data
+2. None-normalize
+ - Network Accumilations ( cant use basepoints because the IF value will reset on machine restart .. Always acumilates upwards.)
+2. Normalized
+ - Just order the bytes and have them in a static queue
+ - byte/byte/byte/byte/byte/byte
+ - Cutom normalized data:
+ - controlByte/byte/byte/byte/byte/byte
+ - Get customized: controlByte/index
