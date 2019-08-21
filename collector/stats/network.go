@@ -167,6 +167,7 @@ func (d *NetworkDynamic) GetFormattedBytes(basePoint bool) []byte {
 
 	// base := History.DynamicBasePoint.NetworkDynamic
 	// prev := History.PreviousDynamicUpdatePoint
+
 	mainList = append(mainList, byte(len(d.Interfaces)))
 	// changeCount := 0
 	for _, v := range d.Interfaces {

@@ -59,14 +59,26 @@ TODO:
 
 1. normalize everything.
 
-# Two types of data
-1. String
- - host data
-2. None-normalize
- - Network Accumilations ( cant use basepoints because the IF value will reset on machine restart .. Always acumilates upwards.)
+# Datas
+1. host data
+ - Check for changes every X seconds
 2. Normalized
  - Just order the bytes and have them in a static queue
  - byte/byte/byte/byte/byte/byte
  - Cutom normalized data:
  - controlByte/byte/byte/byte/byte/byte
  - Get customized: controlByte/index
+3. NETWORK?
+ - https://superuser.com/questions/356907/how-to-get-real-time-network-statistics-in-linux-with-kb-mb-bytes-format-and-for
+ - use this to calculate bytes.
+
+# Data packet formats
+1. controlByte:
+
+# Todo
+1. remake the Excel sheet so that is has some real structure
+2. revisit all data collection
+3. Document all data transmission protocols
+4. add stats that are needed for new protocols. 
+5. Implenent proper logging and error handling.
+6. ....

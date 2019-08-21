@@ -7,13 +7,13 @@ import (
 
 func getData(headerValue int, data []byte, valuePointer int) (index, size int, value int64) {
 	index, size = findOrderAndSize(headerValue)
-	binaryValue := data[valuePointer+1 : valuePointer+size]
-	postOrNeg := data[valuePointer]
-
 	if size == 1 {
 		// log.Print("BB")
 		return index, 0, 0
-	} else if size == 3 {
+	}
+	binaryValue := data[valuePointer+1 : valuePointer+size]
+	postOrNeg := data[valuePointer]
+	if size == 3 {
 		value := binary.LittleEndian.Uint16(binaryValue)
 		if postOrNeg == 0 {
 			// log.Println("WAS NEGATIVE", -int64(value))
@@ -94,18 +94,26 @@ func GetDataFromSection(MainIndex int, data []byte, previousEndingIndex int) (en
 }
 func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
 	dpv = &ParsedDataPointValues{}
+	// log.Println(data)
+	// log.Print(1)
 	diskEndIndex, DiskValue := GetDataFromSection(1, data, 0)
 	dpv.Values = append(dpv.Values, DiskValue...)
+	// log.Print(2, diskEndIndex)
 	memoryEndIndex, MemoryValue := GetDataFromSection(2, data, diskEndIndex)
 	dpv.Values = append(dpv.Values, MemoryValue...)
+	// log.Print(3, memoryEndIndex)
 	loadEndIndex, LoadValue := GetDataFromSection(3, data, memoryEndIndex)
 	dpv.Values = append(dpv.Values, LoadValue...)
+	// log.Print(4, loadEndIndex)
 	entropyEndIndex, EntropyValue := GetDataFromSection(4, data, loadEndIndex)
 	dpv.Values = append(dpv.Values, EntropyValue...)
+	// log.Print(5, entropyEndIndex)
 	networkEndIndex, NetworkValue := GetNetworkDataFromSection(5, data, entropyEndIndex)
 	dpv.Values = append(dpv.Values, NetworkValue...)
+	// log.Print(6, networkEndIndex)
 	_, CPUVaues := GetDataFromSection(6, data, networkEndIndex)
 	dpv.Values = append(dpv.Values, CPUVaues...)
+	// log.Print(7, cpuEndIndex)
 	// for _, v := range dpv.Values {
 	// 	log.Println(v.Index, v.Value)
 	// }
@@ -115,7 +123,6 @@ func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
 func findOrderAndSize(data int) (index int, size int) {
 
 	if data < 100 {
-
 		index = data / 10
 		size = data - (index * 10)
 		// log.Println("data:", data, "less then 100", index, size)

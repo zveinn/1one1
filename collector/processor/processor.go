@@ -186,22 +186,29 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	}(watcherChannel)
 
 	count := collector.CurrentPointIndex
+	startTime := time.Now()
 	for {
 		var data []byte
-		time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-		var basePoint bool
+		if !time.Now().After(startTime.Add(1 * time.Second)) {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		startTime = time.Now()
+		// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
+		var ControlByte byte
 		if count%60 == 0 {
 			staticData := stats.CheckStaticDataForChanges()
 			if staticData != "" {
 				log.Println("do something with static data !")
 			}
-			basePoint = true
+			ControlByte = 1
 			data = stats.CollectBasePoint()
 			collector.LastBasePointIndex = count
 			count = collector.AddDataPoint(data)
 		} else {
 			data = stats.CollectDynamicData()
 			count = collector.AddDataPoint(data)
+			ControlByte = 2
 		}
 
 		accumilatedBytes := 0
@@ -216,18 +223,18 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		w := zlib.NewWriter(&b)
 		w.Write(allBytes)
 		w.Close()
-		log.Println(data)
-		// helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
+		// log.Println(data)
+		helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
 		// continue
 		// log.Println(data)
 		for _, controller := range collector.Controllers {
 			// log.Println("controller", controller.Address, " is active:", controller.Active)
 			if controller.Active {
 				controller.SendChannel <- DataPoint{
-					Data:      data,
-					BasePoint: basePoint,
-					Timestamp: time.Now().UnixNano(),
-					Length:    len(data),
+					Data:        data,
+					ControlByte: ControlByte,
+					Timestamp:   time.Now().UnixNano(),
+					Length:      len(data),
 				}
 			}
 		}
@@ -245,10 +252,10 @@ type Controller struct {
 	//InactiveSince time.Time
 }
 type DataPoint struct {
-	Data      []byte
-	BasePoint bool
-	Timestamp int64
-	Length    int
+	Data        []byte
+	ControlByte byte
+	Timestamp   int64
+	Length      int
 }
 
 func (c *Controller) ChangeActiveStatus(status bool) {
@@ -284,10 +291,10 @@ func (c *Controller) OpenSendChannel() {
 		if err != nil {
 			panic(err)
 		}
-		if datapoint.BasePoint {
-			newbuffer.Write([]byte{101})
-		} else {
-			newbuffer.Write([]byte{102})
+		if datapoint.ControlByte == 1 {
+			newbuffer.Write([]byte{1})
+		} else if datapoint.ControlByte == 2 {
+			newbuffer.Write([]byte{2})
 		}
 		// timestamp := time.Now().UnixNano()
 		err = binary.Write(newbuffer, binary.LittleEndian, int64(datapoint.Timestamp))

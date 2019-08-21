@@ -23,6 +23,11 @@ type MemoryDynamic struct {
 	ValueList  []int64
 }
 
+func GetMemoryBytes() byte {
+	vmStat, err := mem.VirtualMemory()
+	helpers.PanicX(err)
+	return byte(vmStat.UsedPercent)
+}
 func collectMemory(dp *DynamicPoint) {
 	vmStat, err := mem.VirtualMemory()
 	helpers.PanicX(err)

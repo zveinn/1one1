@@ -155,17 +155,17 @@ func (uis *UIServer) ParseDataPoints() {
 			outgoing.DataPoints = append(outgoing.DataPoints, v)
 			// ParseDataPoint(v.Value[8:])
 			// log.Println("ONE DATA POINT:")
-			for _, iv := range outgoing.DataPoints {
-				for _, v := range iv.DPS {
-					log.Print("SECTION::" + v.Tag)
-					log.Print(v.Tag+":", v.Index, ":", v.SubIndex, ":", v.Value)
-				}
+			// for _, iv := range outgoing.DataPoints {
+			// 	for _, v := range iv.DPS {
+			// 		log.Print("SECTION::" + v.Tag)
+			// 		log.Print(v.Tag+":", v.Index, ":", v.SubIndex, ":", v.Value)
+			// 	}
 
-			}
+			// }
 		}
 
-		log.Println("about to parse")
-		uis.ParseForIndividualUsers(outgoing)
+		// log.Println("about to parse")
+		// uis.ParseForIndividualUsers(outgoing)
 		// You can do XYZ and Alarms at the same time with channels.
 		// Parse Alarms
 

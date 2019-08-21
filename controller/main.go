@@ -227,12 +227,15 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 		if err != nil {
 			panic(err)
 		}
-		length := binary.LittleEndian.Uint16(controlBytes[0:3])
+		length := binary.LittleEndian.Uint16(controlBytes[0:2])
+		log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
 		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
 			panic(err)
 		}
+
+		// does this data need to be duplicated ?!
 
 		go controller.saveData(collector.TAG, data, int(controlBytes[2]))
 		go controller.ParseData(collector.TAG, data, int(controlBytes[2]))
@@ -260,12 +263,17 @@ func (c *Controller) saveData(tag string, data []byte, controlByte int) {
 func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 
 	parsedPoint := ParseDataPoint(data[8:], tag)
-	// helpers.DebugLog("DATA:", parsedPoint)
+	// helpers.DebugLog("DATA:", parsedPoint.Values)
+	log.Println("-------------------------------------------------")
+	for i, v := range parsedPoint.Values {
+		log.Println(i, v)
+	}
+	log.Println("-------------------------------------------------")
 	collection := ParsedCollection{
 		DPS: parsedPoint.Values,
 		Tag: tag,
 	}
-	if controlByte == 101 {
+	if controlByte == 1 {
 		collection.BasePoint = true
 		// LiveBuffer.CurrentBase[tag] = collection
 	}
@@ -277,7 +285,7 @@ func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
 			LiveBuffer.CurrentBase[tag] = make(map[string]int64)
 		}
 		statIndex := strconv.Itoa(v.Index) + "." + strconv.Itoa(v.SubIndex)
-		if controlByte == 101 {
+		if controlByte == 1 {
 			LiveBuffer.CurrentBase[tag][statIndex] = v.Value
 			// LiveBuffer.CollectorStatsMap[tag][statIndex] = v.Value
 		} else {

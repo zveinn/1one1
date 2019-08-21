@@ -15,6 +15,19 @@ type ProcessorDynamic struct {
 	ValueList      []int64
 }
 
+func GetCPUByte() []byte {
+	cpuStat, err := process.Processes()
+	helpers.PanicX(err)
+	var psTotal float64
+	var count int
+	for _, v := range cpuStat {
+		ps, err := v.CPUPercent()
+		helpers.PanicX(err)
+		psTotal = psTotal + ps
+		count++
+	}
+	return []byte{byte(psTotal), byte(count)}
+}
 func collectCPU(dp *DynamicPoint) {
 	cpuStat, err := process.Processes()
 	helpers.PanicX(err)
@@ -84,6 +97,7 @@ func getProcesses() {
 		// // typex, err := v.MemoryInfo()
 		// helpers.PanicX(err)
 		//if terminal != "" {
+
 		if username != "root" {
 			log.Println(len(stuff), v.Pid, username, status, name, ps, times.User, times.System, times.Idle, times.Iowait)
 		}
