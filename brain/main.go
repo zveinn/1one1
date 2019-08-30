@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -12,7 +14,30 @@ import (
 	"time"
 
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/safelocker"
 )
+
+type ActiveAlert struct {
+	Namespace string
+	Count     int
+	Triggerd  uint64
+}
+type AlertBucket struct {
+	safelocker.SafeLocker
+	// tag // namespace // count // first trigger ( time )
+	ActiveAlert map[string]ActiveAlert
+}
+
+func (a *AlertBucket) AddAlert(alert ActiveAlert, tag string) {
+	a.Lock()
+	defer a.Unlock()
+	a.ActiveAlert[tag] = alert
+}
+func (a *AlertBucket) RemoveAlert(tag string) {
+	a.Lock()
+	defer a.Unlock()
+	delete(a.ActiveAlert, tag)
+}
 
 func ReadCollectionConfig(b *Brain) {
 	file, err := ioutil.ReadFile("collecting.json")
@@ -33,7 +58,7 @@ func ReadBrainConfig(b *Brain) {
 	b.Config = data
 }
 func ReadAlertingConfig(b *Brain) {
-	b.Alerting = make(map[string]Alerting)
+
 	files, err := ioutil.ReadDir(".")
 	if err != nil {
 		log.Fatal(err)
@@ -48,7 +73,8 @@ func ReadAlertingConfig(b *Brain) {
 
 			data := Alerting{}
 			_ = json.Unmarshal([]byte(file), &data)
-			b.Alerting[data.Name] = data
+			b.Alerting = append(b.Alerting, data)
+			// b.Alerting[data.Name] = data
 		}
 	}
 }
@@ -113,16 +139,25 @@ func (b *Brain) acceptController(socket net.Conn) {
 	if err != nil {
 		panic(err)
 	}
+
 	log.Println("Sending config;", string(jsonConfig))
-	socket.Write(jsonConfig)
-	alertingConfig, err := json.Marshal(b.Alerting)
+	data := new(bytes.Buffer)
+	binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
+	data.Write(jsonConfig)
+	data.WriteTo(socket)
+
+	jsonBrain, err := json.Marshal(b)
 	if err != nil {
 		panic(err)
 	}
-	socket.Write(alertingConfig)
+
+	log.Println("Sending brain;", string(jsonBrain))
+	data = new(bytes.Buffer)
+	binary.Write(data, binary.LittleEndian, uint16(len(jsonBrain)))
+	data.Write(jsonBrain)
+	data.WriteTo(socket)
 
 	LC.ListenToController(jsonConfig)
-
 }
 func (c *LiveController) ListenToController(con []byte) {
 
@@ -130,7 +165,10 @@ func (c *LiveController) ListenToController(con []byte) {
 		for {
 			time.Sleep(20000 * time.Millisecond)
 			log.Println("sending config again!")
-			c.Socket.Write(con)
+			var data = new(bytes.Buffer)
+			binary.Write(data, binary.LittleEndian, uint16(len(con)))
+			data.Write(con)
+			data.WriteTo(c.Socket)
 		}
 	}()
 	buf := make([]byte, 20000)
@@ -148,7 +186,7 @@ func (b *Brain) AssignControllerToIPAndPort(c *LiveController) {
 	cIP := strings.Split(c.Socket.RemoteAddr().String(), ":")[0]
 	for _, v := range b.Config.Clusters {
 		for _, iv := range v.Controllers {
-			if iv.IP == cIP || iv.UI.IP == cIP || iv.Collector.IP == cIP {
+			if iv.IP == cIP {
 				iv.Live = true
 				c.Config = &iv
 			}

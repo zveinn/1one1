@@ -4,9 +4,9 @@ import "net"
 
 type Brain struct {
 	Config      Config
-	Alerting    map[string]Alerting
-	Collecting  Collecting
-	Controllers map[string]LiveController
+	Alerting    []Alerting                `json:"alerting"`
+	Collecting  Collecting                `json:"collecting"`
+	Controllers map[string]LiveController `json:"-"`
 }
 type LiveController struct {
 	Socket net.Conn    `json:"-"`
@@ -23,7 +23,6 @@ type Collecting struct {
 		Indexes []string `json:"indexes"`
 	} `json:"custom"`
 }
-
 type Alerting struct {
 	Name  string `json:"name"`
 	Slack struct {
@@ -69,8 +68,9 @@ type Controller struct {
 	UI        UI        `json:"ui"`
 	Collector Collector `json:"collector"`
 	Live      bool
-	Enabled   bool `json:"enabled"`
+	Shutdown  bool `json:"shutdown"`
 	Debug     bool `json:"debug"`
+	Restart   bool `json:"restart"`
 }
 type Collector struct {
 	IP   string `json:"ip"`

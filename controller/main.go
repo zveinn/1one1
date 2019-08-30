@@ -21,17 +21,32 @@ import (
 )
 
 var GlobalController *Controller
+var GlobalBrain *Brain
 
 type Brain struct {
+	safelocker.SafeLocker
 	Socket      net.Conn
 	Address     string
 	SendChannel chan []byte
+	Alerting    []Alerting `json:"alerting"`
+	Collecting  Collecting `json:"collecting"`
+}
+type Collecting struct {
+	Default []struct {
+		Tag     string   `json:"tag"`
+		Indexes []string `json:"indexes"`
+	} `json:"default"`
+	Custom []struct {
+		Tag     string   `json:"tag"`
+		Indexes []string `json:"indexes"`
+	} `json:"custom"`
 }
 type ControllerConfig struct {
-	IP      string
-	Debug   bool
-	Enabled bool
-	UI      struct {
+	Restart  bool
+	IP       string
+	Debug    bool
+	Shutdown bool
+	UI       struct {
 		IP   string
 		Port int
 	}
@@ -41,22 +56,63 @@ type ControllerConfig struct {
 	}
 }
 
+type Alerting struct {
+	Name  string `json:"name"`
+	Slack struct {
+	} `json:"slack"`
+	Email struct {
+	} `json:"email"`
+	Irc struct {
+	} `json:"irc"`
+	Pagerduty struct {
+	} `json:"pagerduty"`
+	Sms struct {
+	} `json:"sms"`
+	DefaultType string `json:"default_type"`
+	Defaults    []struct {
+		Tag       string   `json:"tag"`
+		Namespace string   `json:"namespace"`
+		Value     int      `json:"value"`
+		Time      string   `json:"time"`
+		Count     int      `json:"count"`
+		Color     string   `json:"color"`
+		To        []string `json:"to"`
+	} `json:"defaults"`
+}
+
 func main() {
 	rand.Seed(time.Now().Unix())
 	Brain := Brain{
 		Address: os.Args[1],
 	}
+	GlobalBrain = &Brain
 	socket, err := net.Dial("tcp", Brain.Address)
 	if err != nil {
 		panic(err)
 	}
-	decoder := json.NewDecoder(socket)
-	var config ControllerConfig
-	err = decoder.Decode(&config)
+
+	lengthBytes := make([]byte, 2)
+	_, err = socket.Read(lengthBytes)
 	if err != nil {
-		panic(err)
+		log.Println("Error reading length bytes from brain", err)
+		os.Exit(1)
+	}
+	data := make([]byte, binary.LittleEndian.Uint16(lengthBytes))
+	_, err = socket.Read(data)
+	if err != nil {
+		log.Println("Error reading data fom brain ...", err)
+		os.Exit(1)
 	}
 
+	// log.Println(string(data))
+	var config ControllerConfig
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		log.Println("Something went wrong when receiving a config from the brain", err)
+		os.Exit(1)
+	}
+	log.Println("GOT A CONFIG:", config)
+	// os.Exit(1)
 	Brain.Socket = socket
 	Brain.SendChannel = make(chan []byte, 10000)
 
@@ -76,7 +132,6 @@ func main() {
 		MinLinesInBufferFile: 10,
 		UI:                   UIServer,
 	}
-	log.Println(controller.Config)
 	// os.Exit(1)
 	watcherChannel := make(chan int, 10)
 	closeChannel := make(chan bool, 10)
@@ -134,28 +189,36 @@ func (b *Brain) MaintainLinkToBrain(watcherChannel chan int, closeChannel chan b
 	for {
 		log.Println("listening to brain ...")
 		// make a decoder
-		decoder := json.NewDecoder(b.Socket)
-
-		// try to decode a config
-		var config ControllerConfig
-
-		err := decoder.Decode(&config)
-		if err != nil || config.Collector.IP == "" {
-			log.Println("no config...")
-		} else if !config.Enabled {
-			log.Println(config)
-			log.Println("Brain told me to exit...")
-			os.Exit(1)
-		} else {
-			log.Println("Brain told me to restart ...")
-			GlobalController.Config = config
-			restartEverything(closeChannel)
-			continue
+		lengthBytes := make([]byte, 2)
+		_, err := b.Socket.Read(lengthBytes)
+		if err != nil {
+			log.Println("Error reading length bytes from brain", err)
+			return
 		}
+		data := make([]byte, binary.LittleEndian.Uint16(lengthBytes))
+		_, err = b.Socket.Read(data)
+		if err != nil {
+			log.Println("Error reading data fom brain ...", err)
+		}
+		b.DecodeBrain(data)
+		b.DecodeConfig(closeChannel, data)
 
 	}
 }
-func restartEverything(closeChannel chan bool) {
+func (b *Brain) DecodeBrain(data []byte) {
+	var brain Brain
+	err := json.Unmarshal(data, &brain)
+	if err != nil || len(brain.Alerting) < 1 {
+		log.Println("no brain or missing parts..", err)
+	} else {
+		// log.Println("Brain", brain)
+		b.Lock()
+		b.Alerting = brain.Alerting
+		b.Collecting = brain.Collecting
+		b.Unlock()
+	}
+}
+func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("crashed while restarting..", r, string(debug.Stack()))
@@ -164,22 +227,36 @@ func restartEverything(closeChannel chan bool) {
 		GlobalController.SafeUnlock()
 	}()
 
-	UIHTTPsrv.Close()
-	GlobalController.Lock()
-	for _, v := range GlobalController.UI.ClientList {
-		if v != nil {
-			_ = v.Conn.Close()
-		}
-	}
-	for _, v := range GlobalController.Collectors {
-		if v != nil {
-			_ = v.Conn.Close()
-		}
+	// Decode the config
+	var config ControllerConfig
+	err := json.Unmarshal(data, &config)
+	if err != nil || config.Collector.IP == "" {
+		log.Println("no config...")
+	} else if config.Shutdown {
+		log.Println("Brain told me to exit...")
+		os.Exit(1)
+	} else {
+		log.Println("Brain told me to restart ...")
+		if config.Restart {
+			UIHTTPsrv.Close()
+			GlobalController.Lock()
+			for _, v := range GlobalController.UI.ClientList {
+				if v != nil {
+					_ = v.Conn.Close()
+				}
+			}
+			for _, v := range GlobalController.Collectors {
+				if v != nil {
+					_ = v.Conn.Close()
+				}
+			}
 
+			GlobalController.Unlock()
+			closeChannel <- true
+		}
+		GlobalController.Config = config
 	}
 
-	GlobalController.Unlock()
-	closeChannel <- true
 }
 
 type Controller struct {

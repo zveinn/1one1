@@ -11,8 +11,7 @@
     {
       "tag":"some-project",
       "controllers":[
-        {"enabled":true,"debug":true,"collector":{"ip":"127.0.0.1","port":6670},"ui":{"ip":"127.0.0.1","port":6671}},
-        {"enabled":true,"debug":true,"collector":{"ip":"127.0.0.1","port":6680},"ui":{"ip":"127.0.0.1","port":6681}}
+        {"restart":true,"shutdown":false,"debug":true,"ip":"127.0.0.1","collector":{"ip":"127.0.0.1","port":6670},"ui":{"ip":"127.0.0.1","port":6671}}
       ]
     }
   ],
