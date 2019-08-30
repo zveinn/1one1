@@ -3,7 +3,6 @@ package processor
 import (
 	"bufio"
 	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"log"
@@ -26,7 +25,6 @@ type Collector struct {
 	Controllers        map[string]*Controller
 	mutex              sync.Mutex
 	PointMap           map[int][]byte
-	StaticMap          map[int]string
 	LastBasePointIndex int
 	CurrentPointIndex  int
 	CurrentStaticIndex int
@@ -52,18 +50,6 @@ func (c *Collector) AddDataPoint(point []byte) (count int) {
 	c.PointMap[c.CurrentPointIndex] = point
 	c.CurrentPointIndex++
 	return c.CurrentPointIndex
-}
-func (c *Collector) AddStaticPoint(point string) (count int) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	if len(c.StaticMap) > 200000 {
-		c.StaticMap = nil
-		c.StaticMap = make(map[int]string)
-		c.CurrentStaticIndex = 0
-	}
-	c.StaticMap[c.CurrentStaticIndex] = point
-	c.CurrentStaticIndex++
-	return c.CurrentStaticIndex
 }
 
 func (c *Collector) GetIntervalsFromEnvironmentVariables() {
@@ -113,7 +99,7 @@ func (c *Collector) CleanupOnExit() {
 	}
 }
 
-func sendFirstBasePoint(collector *Collector, controller *Controller) {
+func sendBasePoint(collector *Collector, controller *Controller) {
 	var data []byte
 	if len(collector.PointMap) > 0 {
 		data = collector.PointMap[collector.LastBasePointIndex]
@@ -151,18 +137,21 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 			log.Println("collector panic...", r)
 		}
 		watcherChannel <- 2
+		log.Println("Stopped maintining controllers...")
 	}(watcherChannel)
 	for {
 		// TODO: implement rand int sleeper
 		time.Sleep(time.Duration(collector.MaintainerInterval) * time.Second)
 		//helpers.DebugLog("5 second controller maintnance starting ...")
+		log.Println("Number of controllers to maintain:", len(collector.Controllers))
 		for _, controller := range collector.Controllers {
 			log.Println("maintaining controller:", controller)
 			if controller.Active {
+				log.Println("Controller is already active...")
 				continue
 			}
 			if err := collector.dialAndHandshake(controller, collector.TAG); err != nil {
-				//helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
+				helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
 				continue
 			}
 			helpers.DebugLog("Recovered connection to:", controller.Address)
@@ -170,7 +159,7 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 
 			helpers.DebugLog("Engaging controller listener to", controller.Address)
 			go controller.OpenSendChannel()
-			sendFirstBasePoint(collector, controller)
+			// sendBasePoint(collector, controller)
 		}
 	}
 
@@ -185,59 +174,59 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		watcherChannel <- 1
 	}(watcherChannel)
 
-	count := collector.CurrentPointIndex
+	// count := collector.CurrentPointIndex
 	startTime := time.Now()
 	for {
 		var data []byte
-		if !time.Now().After(startTime.Add(1 * time.Second)) {
-			time.Sleep(100 * time.Millisecond)
+		if !time.Now().After(startTime.Add(1000 * time.Millisecond)) {
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 		startTime = time.Now()
-		// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-		var ControlByte byte
-		if count%60 == 0 {
-			staticData := stats.CheckStaticDataForChanges()
-			if staticData != "" {
-				log.Println("do something with static data !")
-			}
-			ControlByte = 1
-			data = stats.CollectBasePoint()
-			collector.LastBasePointIndex = count
-			count = collector.AddDataPoint(data)
-		} else {
-			data = stats.CollectDynamicData()
-			count = collector.AddDataPoint(data)
-			ControlByte = 2
-		}
+		go func() {
+			// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
+			var ControlByte byte
+			// if count%60 == 0 {
+			// 	staticData := stats.CheckStaticDataForChanges()
+			// 	if staticData != "" {
+			// 		log.Println("do something with static data !")
+			// 	}
+			// 	ControlByte = 1
+			// 	data = stats.CollectBasePoint()
+			// 	collector.LastBasePointIndex = count
+			// 	count = collector.AddDataPoint(data)
+			// } else {
+			data = stats.GetMinimumStats()
+			// count = collector.AddDataPoint(data)
+			// control byte 4 means this is a minimal data point
+			ControlByte = 4
+			// }
 
-		accumilatedBytes := 0
-		pointCount := 0
-		var allBytes []byte
-		for _, v := range collector.PointMap {
-			accumilatedBytes = accumilatedBytes + len(v)
-			allBytes = append(allBytes, v...)
-			pointCount++
-		}
-		var b bytes.Buffer
-		w := zlib.NewWriter(&b)
-		w.Write(allBytes)
-		w.Close()
-		// log.Println(data)
-		helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
-		// continue
-		// log.Println(data)
-		for _, controller := range collector.Controllers {
-			// log.Println("controller", controller.Address, " is active:", controller.Active)
-			if controller.Active {
-				controller.SendChannel <- DataPoint{
-					Data:        data,
-					ControlByte: ControlByte,
-					Timestamp:   time.Now().UnixNano(),
-					Length:      len(data),
+			// accumilatedBytes := 0
+			// pointCount := 0
+			// var allBytes []byte
+			// for _, v := range collector.PointMap {
+			// 	accumilatedBytes = accumilatedBytes + len(v)
+			// 	allBytes = append(allBytes, v...)
+			// 	pointCount++
+			// }
+			// var b bytes.Buffer
+			// w := zlib.NewWriter(&b)
+			// w.Write(allBytes)
+			// w.Close()
+			// helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
+			for _, controller := range collector.Controllers {
+				if controller.Active {
+					controller.SendChannel <- DataPoint{
+						Data:        data,
+						ControlByte: ControlByte,
+						Timestamp:   time.Now().UnixNano(),
+						Length:      len(data),
+					}
 				}
 			}
-		}
+		}()
+
 	}
 }
 
@@ -247,7 +236,6 @@ type Controller struct {
 	Conn        net.Conn
 	Retry       int
 	mutex       sync.Mutex
-	Send        chan []byte
 	SendChannel chan DataPoint
 	//InactiveSince time.Time
 }
@@ -277,41 +265,33 @@ func (c *Controller) OpenSendChannel() {
 		}
 		helpers.DebugLog("Closing send loop to controller", c.Address)
 		c.ChangeActiveStatus(false)
-		close(c.Send)
+		close(c.SendChannel)
 	}()
-	c.SendChannel = make(chan DataPoint, 10000)
+	// 180 datapoints is 3 minutes of downtime
+	c.SendChannel = make(chan DataPoint, 180)
 	newbuffer := new(bytes.Buffer)
 	for {
+		// incase we are recovering from being offline for 3 minutes
+		// we want to sleep 10 milliseconds before trying to send the next one.
+		time.Sleep(10 * time.Millisecond)
 		datapoint, errx := <-c.SendChannel
 		if !errx {
 			break
 		}
-
 		err := binary.Write(newbuffer, binary.LittleEndian, int16(datapoint.Length))
 		if err != nil {
 			panic(err)
 		}
-		if datapoint.ControlByte == 1 {
-			newbuffer.Write([]byte{1})
-		} else if datapoint.ControlByte == 2 {
-			newbuffer.Write([]byte{2})
-		}
-		// timestamp := time.Now().UnixNano()
+		newbuffer.Write([]byte{datapoint.ControlByte})
 		err = binary.Write(newbuffer, binary.LittleEndian, int64(datapoint.Timestamp))
 		if err != nil {
 			panic(err)
 		}
-
 		newbuffer.Write(datapoint.Data)
-
-		// newbuffer = append(newbuffer, data)
-		// helpers.DebugLog("Bytes from pipes:", newbuffer.Bytes())
 		n, err := newbuffer.WriteTo(c.Conn)
 		newbuffer.Reset()
-		// _, err := c.Conn.Write(newbuffer)
 		if err != nil {
 			helpers.DebugLog("ERROR WHEN WRITING STATS (Count", n, ") err:", err)
-			close(c.Send)
 			break
 		}
 	}
@@ -328,11 +308,10 @@ func dialController(controller *Controller) (err error) {
 func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
-
-	data := stats.GetStaticBasePoint()
-	_ = c.AddStaticPoint(data)
-	_, err = controller.Conn.Write([]byte(data + "\n"))
-	helpers.PanicX(err)
+	log.Println("HANDSHAKING!")
+	// data := stats.GetStaticBasePoint()
+	// _, err = controller.Conn.Write([]byte(data + "\n"))
+	// helpers.PanicX(err)
 
 	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
 	if msg != "k\n" || err != nil {
@@ -343,6 +322,7 @@ func (c *Collector) handShakeWithController(controller *Controller, tag string) 
 
 		return errors.New("Could not handshake with controller")
 	}
+	log.Println("DONE HANDSHAKING!")
 	controller.ChangeActiveStatus(true)
 	return
 }
@@ -351,6 +331,7 @@ func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err er
 	if err != nil {
 		return
 	}
+
 	err = c.handShakeWithController(controller, tag)
 	if err != nil {
 		return
@@ -371,6 +352,6 @@ func ConnectToControllers(controllers string, tag string, collector *Collector) 
 		}
 		helpers.DebugLog("Connected to:", controller.Address)
 		go controller.OpenSendChannel()
-		sendFirstBasePoint(collector, controller)
+		// sendBasePoint(collector, controller)
 	}
 }

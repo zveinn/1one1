@@ -4,49 +4,87 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/zkynetio/safelocker"
 )
 
 type UIServer struct {
-	ClientList map[string]*UI
-	Mutex      sync.RWMutex
-	Settings   *Settings
-	DPChan     chan ParsedCollection
-	DPBuffer   []ParsedCollection
+	ClientList     map[string]*UI
+	Mutex          sync.RWMutex
+	IP             string
+	Port           string
+	DPChan         chan []byte
+	HistoryChannel chan DPCollection
+	History        map[string]DPCollection
 }
 type UI struct {
 	Conn        *websocket.Conn
 	Config      Config
 	DataChannel chan []byte
 	Buffer      []*OutgoingData
-	Mux         sync.RWMutex
+	safelocker.SafeLocker
 }
 
-func (uis *UIServer) ShipToUIS() {
+var UIHTTPsrv *http.Server
 
+func (uis *UIServer) SaveToUIBuffer() {
+	uis.History = make(map[string]DPCollection)
 	for {
-		// time.Sleep(1 * time.Second)
-		go uis.AddToBuffer(<-uis.DPChan)
-		// for _, v := range uis.ClientList {
+		dpc := <-uis.HistoryChannel
 
-		// 	dp.Timestamp = int64(binary.LittleEndian.Uint64(dp.Value[:8]))
-		// 	v.Conn.WriteJSON(dp)
-		// }
+		olddpc, ok := uis.History[dpc.Tag]
+		if ok {
+			hasChanged := false
+			msg := dpc.Tag + "/"
+			for _, v := range dpc.DPS {
+				for _, iv := range olddpc.DPS {
+					if iv.Index == v.Index {
+						if iv.Value != v.Value {
+							hasChanged = true
+							msg = msg + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "/"
+						}
+					}
+				}
+			}
+
+			if hasChanged {
+				// log.Println("sending on the dp chan!")
+				uis.DPChan <- []byte(msg)
+			} else {
+				log.Println("HAS NOT CHANGED !!")
+			}
+		}
+
+		uis.History[dpc.Tag] = dpc
 	}
 }
 
-func (uis *UIServer) AddToBuffer(pc ParsedCollection) {
-	uis.Mutex.Lock()
-	uis.DPBuffer = append(uis.DPBuffer, pc)
-	uis.Mutex.Unlock()
-}
+func (uis *UIServer) ShipToUIS() {
+	for {
+		time.Sleep(1000 * time.Millisecond)
+		dpcLength := len(uis.DPChan)
+		var data []byte
+		// log.Println("PD chan length", dpcLength)
+		for i := 0; i < dpcLength; i++ {
+			msg := <-uis.DPChan
+			data = append(data, byte(44))
+			data = append(data, msg...)
+		}
 
-// func AddDataPointToUIS(dp *DataPoint){
-// 	for i, v := range
-// }
+		if len(data) < 1 {
+			continue
+		}
+		for _, v := range uis.ClientList {
+			v.Conn.WriteMessage(1, data)
+		}
+
+	}
+}
 
 func (uis *UIServer) AddUI(TAG string, client *UI) {
 	uis.Mutex.Lock()
@@ -68,8 +106,19 @@ func (uis *UIServer) Start(watcherChannel chan int) {
 		watcherChannel <- 1
 	}(watcherChannel)
 
-	http.HandleFunc("/", uis.wsHandler)
-	panic(http.ListenAndServe(uis.Settings.UIIP+":"+uis.Settings.UIPORT, nil))
+	router := mux.NewRouter()
+	router.HandleFunc("/", uis.wsHandler).Methods("GET")
+
+	srv := http.Server{
+		Addr:    uis.IP + ":" + uis.Port,
+		Handler: router,
+	}
+
+	UIHTTPsrv = &srv
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("listen: %s\n", err)
+		panic("meow")
+	}
 
 }
 
@@ -84,8 +133,8 @@ func (uis *UIServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (uis *UIServer) AcceptConnection(conn *websocket.Conn) {
-
-	uis.AddUI("meow", &UI{
+	UID := conn.RemoteAddr().String()
+	uis.AddUI(UID, &UI{
 		Conn: conn,
 		// we need this in case the client disconnects.
 		DataChannel: make(chan []byte),
@@ -103,6 +152,7 @@ func (uis *UIServer) AcceptConnection(conn *websocket.Conn) {
 		log.Println(err)
 	}
 	log.Println(config)
+	uis.ClientList[UID].Config = config
 	for {
 		// log.Println("reading ....")
 		_, msg, err := conn.ReadMessage()
@@ -117,105 +167,6 @@ func (uis *UIServer) AcceptConnection(conn *websocket.Conn) {
 		log.Println(msg)
 	}
 
-	// config := &Config{
-	// 	Blink:      Blink{},
-	// 	X:          X{},
-	// 	Y:          Y{},
-	// 	Z:          Z{},
-	// 	Luminocity: Luminocity{},
-	// 	Size:       Size{},
-	// }
-	// err := json.Unmarshal([]byte(configData), config)
-	// helpers.DebugLog(err)
-	// start handshake..
-}
-
-func (uis *UIServer) ParseDataPoints() {
-	for {
-		log.Println("sleeping 1 second befor parsing")
-		time.Sleep(5 * time.Second)
-		length := len(uis.DPBuffer)
-		if length == 0 {
-			continue
-		}
-		var newBuffer []ParsedCollection
-		uis.Mutex.Lock()
-
-		newBuffer = uis.DPBuffer[0:length]
-		// log.Println("uis buffer before:", len(uis.DPBuffer))
-		uis.DPBuffer = uis.DPBuffer[length:]
-		// log.Println("uis buffer after:", len(uis.DPBuffer))
-		// log.Println("new buffer:", len(newBuffer))
-		// log.Println()
-		uis.Mutex.Unlock()
-		outgoing := &OutgoingData{}
-		for _, v := range newBuffer {
-
-			// log.Println(&v)
-			outgoing.DataPoints = append(outgoing.DataPoints, v)
-			// ParseDataPoint(v.Value[8:])
-			// log.Println("ONE DATA POINT:")
-			// for _, iv := range outgoing.DataPoints {
-			// 	for _, v := range iv.DPS {
-			// 		log.Print("SECTION::" + v.Tag)
-			// 		log.Print(v.Tag+":", v.Index, ":", v.SubIndex, ":", v.Value)
-			// 	}
-
-			// }
-		}
-
-		// log.Println("about to parse")
-		// uis.ParseForIndividualUsers(outgoing)
-		// You can do XYZ and Alarms at the same time with channels.
-		// Parse Alarms
-
-		// User specific
-		// Normalize
-		// parse groups
-
-	}
-
-}
-func (uis *UIServer) ParseForIndividualUsers(og *OutgoingData) {
-
-	// log.Println(og)
-	client := Config{
-		X: X{Index: "2.3"},
-		Y: Y{Index: "1.2"},
-		Z: Z{Index: "2.3"},
-	}
-	UI := &UI{
-		Config: client,
-	}
-	uis.ClientList["meow"] = UI
-	// for _, client := range uis.ClientList {
-	// 	// // inside the client.
-	// 	// grid := &Grid{
-	// 	// 	Point: make(map[int]map[int]map[int]*ParsedDataPoint),
-	// 	// }
-	// 	// log.Println(client)
-	// 	for _, outgoing := range og.DataPoints {
-	// 		var x float64
-	// 		var z float64
-	// 		var y float64
-	// 		for _, dp := range outgoing.DPS {
-	// 			// z := 0
-	// 			// y := 0
-	// 			index := strconv.Itoa(dp.Index) + "." + strconv.Itoa(dp.SubIndex)
-	// 			log.Println("index:", index, " config-x:", client.Config.X.Index, "Value:", dp.Value)
-	// 			if index == client.Config.X.Index {
-	// 				x = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
-	// 			}
-	// 			if index == client.Config.Z.Index {
-	// 				z = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
-	// 			}
-	// 			if index == client.Config.Y.Index {
-	// 				y = compareToMax(dp, outgoing.Tag, outgoing.BasePoint)
-	// 			}
-	// 		}
-	// 		log.Println("X:", x, "Y:", y, "Z:", z)
-	// 	}
-	// }
 }
 
 type Grid struct {
@@ -253,69 +204,12 @@ type Group struct {
 	Y int
 	Z int
 	// Size int
-	ID int
+	Tag int
 }
 
 type Config struct {
-	Z          Z
-	Y          Y
-	X          X
-	Blink      Blink
-	Luminocity Luminocity
-	Size       Size
+	Indexes []int
 	// Rate in milliseconds
 	UpdateRate   int
 	WantsUpdates bool
-	Indexes      []int
 }
-
-type Blink struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-type Luminocity struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-
-type Size struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-
-type X struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-type Y struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-type Z struct {
-	Index string
-	Tag   string
-	// Normalize bool
-}
-
-// func connectUI(ui *UI, controller *Controller, tag string) {
-// 	helpers.DebugLog("UI:")
-// 	controller.AddUI(tag+"TODORANDOMINT?", ui)
-// 	for {
-// 		outgoing := <-ui.SendChannel
-// 		log.Println(outgoing)
-// 		_, err := ui.Conn.Write([]byte(outgoing))
-// 		//TODO: handle better
-// 		helpers.PanicX(err)
-// 	}
-// }
-
-// func (c *Controller) sendToAllUis(msg string) {
-// 	for _, ui := range c.UIs {
-// 		ui.SendChannel <- msg
-// 	}
-// }

@@ -21,8 +21,8 @@ func main() {
 	}
 	collector.GetIntervalsFromEnvironmentVariables()
 	defer collector.CleanupOnExit()
+	// the point map is only for debugging.
 	collector.PointMap = make(map[int][]byte)
-	collector.StaticMap = make(map[int]string)
 	collector.Controllers = make(map[string]*processor.Controller)
 
 	stats.InitStats()

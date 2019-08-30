@@ -23,6 +23,14 @@ type DynamicPoint struct {
 	Load15MIN float64
 }
 
+type MinimumStats struct {
+	CPUUsage    int8
+	DiskUsage   int8
+	MemoryUsage int8
+	NetworkIn   uint64
+	NetworkOut  uint64
+}
+
 type StaticPoint struct {
 	NetworkStatic map[string]*NetworkStatic
 	HostStatic
@@ -33,6 +41,9 @@ type HistoryBuffer struct {
 	DynamicUpdatePoint         *DynamicPoint
 	DynamicBasePoint           *DynamicPoint
 
+	PreviousMinimumStats *MinimumStats
+	MinimumStats         *MinimumStats
+
 	StaticPreviousUpdatePoint *StaticPoint
 	StaticBasePoint           *StaticPoint
 	StaticUpdatePoint         *StaticPoint
@@ -40,6 +51,17 @@ type HistoryBuffer struct {
 
 func InitStats() {
 	History = &HistoryBuffer{}
+}
+func GetMinimumStats() []byte {
+	log.Println("Min stats..")
+	History.MinimumStats = &MinimumStats{}
+	var data []byte
+	data = append(data, GetCPUByte())
+	data = append(data, GetDiskByte())
+	data = append(data, GetMemoryByte())
+	data = append(data, GetNetworkBytes(History)...)
+	History.PreviousMinimumStats = History.MinimumStats
+	return data
 }
 
 func CollectBasePoint() []byte {

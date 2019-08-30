@@ -15,18 +15,24 @@ type ProcessorDynamic struct {
 	ValueList      []int64
 }
 
-func GetCPUByte() []byte {
+func GetCPUByte() byte {
 	cpuStat, err := process.Processes()
 	helpers.PanicX(err)
 	var psTotal float64
-	var count int
+	// var count int
 	for _, v := range cpuStat {
 		ps, err := v.CPUPercent()
-		helpers.PanicX(err)
+		if err != nil {
+			log.Println("A process might disapear before we manage to stat it..")
+			continue
+		}
+		// helpers.PanicX(err)
 		psTotal = psTotal + ps
-		count++
+		// count++
 	}
-	return []byte{byte(psTotal), byte(count)}
+	psTotal = psTotal / float64(runtime.NumCPU())
+	// log.Println("SAVING CPU:", psTotal, int8(psTotal), byte(int8(psTotal)))
+	return byte(int8(psTotal))
 }
 func collectCPU(dp *DynamicPoint) {
 	cpuStat, err := process.Processes()
@@ -101,6 +107,7 @@ func getProcesses() {
 		if username != "root" {
 			log.Println(len(stuff), v.Pid, username, status, name, ps, times.User, times.System, times.Idle, times.Iowait)
 		}
+
 		// for _, v := range connections {
 		// 	if v.Status != "NONE" {
 		// 		log.Println(v)

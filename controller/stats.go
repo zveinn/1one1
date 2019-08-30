@@ -92,6 +92,38 @@ func GetDataFromSection(MainIndex int, data []byte, previousEndingIndex int) (en
 	}
 	return
 }
+
+type DP struct {
+	Index int
+	Value int
+}
+type DPCollection struct {
+	Tag         string `json:"tag"`
+	DPS         []DP   `json:"dps"`
+	Timestamp   uint64 `json:"-"`
+	ControlByte int    `json:"-"`
+}
+
+func ParseMinimumDataPoint(data []byte) DPCollection {
+	// log.Println("FULL DATA", data)
+	// cpu := int8(data[0])
+	// disk := int8(data[1])
+	// memory := int8(data[2])
+	// networkIN := binary.LittleEndian.Uint64(data[3:11])
+	// networkOUT := binary.LittleEndian.Uint64(data[11:19])
+	// log.Println("CPU:", cpu)
+	// log.Println("DISK:", disk)
+	// log.Println("MEMORY:", memory)
+	// log.Println("NETWORK IN:", networkIN)
+	// log.Println("NETWORK OUT:", networkOUT)
+	DPC := DPCollection{}
+	DPC.DPS = append(DPC.DPS, DP{Value: int(data[0]), Index: 1})
+	DPC.DPS = append(DPC.DPS, DP{Value: int(data[1]), Index: 2})
+	DPC.DPS = append(DPC.DPS, DP{Value: int(data[2]), Index: 3})
+	DPC.DPS = append(DPC.DPS, DP{Value: int(binary.LittleEndian.Uint64(data[3:11])), Index: 4})
+	DPC.DPS = append(DPC.DPS, DP{Value: int(binary.LittleEndian.Uint64(data[11:19])), Index: 5})
+	return DPC
+}
 func ParseDataPoint(data []byte, tag string) (dpv *ParsedDataPointValues) {
 	dpv = &ParsedDataPointValues{}
 	// log.Println(data)

@@ -1,0 +1,14 @@
+{
+    "name":"project1",
+    "slack":{},
+    "email":{},
+    "irc":{},
+    "pagerduty":{},
+    "sms":{},
+    "default_type":"slack",
+    "defaults":[
+        {"tag":"*","namespace":"cpu.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]},
+        {"tag":"*","namespace":"disk.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]},
+        {"tag":"*","namespace":"memory.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]}
+    ]
+}

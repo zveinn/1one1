@@ -15,7 +15,7 @@ type LoadDynamic struct {
 func GetLoadBytes() []byte {
 	ld, err := load.Avg()
 	helpers.PanicX(err)
-	return []byte{byte(ld.Load1), byte(ld.Load5), byte(ld.Load15)}
+	return []byte{byte(int8(ld.Load1)), byte(int8(ld.Load5)), byte(ld.Load15)}
 }
 func collectLoad(dp *DynamicPoint) {
 	ld, err := load.Avg()

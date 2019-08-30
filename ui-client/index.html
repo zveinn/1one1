@@ -10,16 +10,16 @@
     
 </body>
 <script>
-    let socket = new WebSocket("ws:127.0.0.1:7781");
+    let socket = new WebSocket("ws:127.0.0.1:6681");
     // datapoint = {index:number, value:number}
 var datapoints = []
 var config = {
-  X: {"normalize":false, "index":"disk.free"},
-  Y: {"normalize":true, "index":"disk.free"},
-  Z: {"normalize":false, "index":"disk.free"},
-  Size: {"normalize":false, "index":"disk.free"},
-  Luminocity: {"normalize":false, "index":"disk.free"},
-  Blink: {"normalize":false, "index":"disk.free"},
+  X: {"normalize":true, "index":1},
+  Y: {"normalize":true, "index":2},
+  Z: {"normalize":true, "index":3},
+  Size: {"normalize":true, "index":4},
+  Luminocity: {"normalize":true, "index":5},
+  Blink: {},
   UpdateRate: 1000,
   WantsUpdates: true,
 }

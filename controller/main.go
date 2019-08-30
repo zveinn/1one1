@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"log"
 	"math/rand"
@@ -16,31 +17,73 @@ import (
 	"time"
 
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/safelocker"
 )
 
 var GlobalController *Controller
 
+type Brain struct {
+	Socket      net.Conn
+	Address     string
+	SendChannel chan []byte
+}
+type ControllerConfig struct {
+	IP      string
+	Debug   bool
+	Enabled bool
+	UI      struct {
+		IP   string
+		Port int
+	}
+	Collector struct {
+		IP   string
+		Port int
+	}
+}
+
 func main() {
 	rand.Seed(time.Now().Unix())
-
-	Settings := &Settings{}
-	Settings.LoadConfigFromFile("config.yml")
-
-	log.Println("Settings:", Settings)
-	UIServer := &UIServer{
-		Settings:   Settings,
-		ClientList: make(map[string]*UI),
-		DPChan:     make(chan ParsedCollection, 1000000),
+	Brain := Brain{
+		Address: os.Args[1],
 	}
-	go UIServer.ShipToUIS()
+	socket, err := net.Dial("tcp", Brain.Address)
+	if err != nil {
+		panic(err)
+	}
+	decoder := json.NewDecoder(socket)
+	var config ControllerConfig
+	err = decoder.Decode(&config)
+	if err != nil {
+		panic(err)
+	}
+
+	Brain.Socket = socket
+	Brain.SendChannel = make(chan []byte, 10000)
+
+	UIServer := &UIServer{
+		ClientList:     make(map[string]*UI),
+		DPChan:         make(chan []byte, 1000000),
+		HistoryChannel: make(chan DPCollection, 100000),
+		IP:             config.UI.IP,
+		Port:           strconv.Itoa(config.UI.Port),
+	}
+
 	controller := Controller{
-		Settings:             Settings,
+		Config:               config,
 		Collectors:           make(map[string]*Collector),
 		Buffer:               make(chan *DataPoint, 1000000),
 		BufferDirectoryPath:  "./buffers/",
 		MinLinesInBufferFile: 10,
 		UI:                   UIServer,
 	}
+	log.Println(controller.Config)
+	// os.Exit(1)
+	watcherChannel := make(chan int, 10)
+	closeChannel := make(chan bool, 10)
+	go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
+	go UIServer.ShipToUIS()
+	go UIServer.SaveToUIBuffer()
+
 	GlobalController = &controller
 
 	LiveBuffer = &Collection{
@@ -50,22 +93,24 @@ func main() {
 	}
 	defer controller.CleanupOnExit()
 	go controller.EngageBufferPipe()
-	go UIServer.ParseDataPoints()
-	watcherChannel := make(chan int)
 
 	go UIServer.Start(watcherChannel)
-	go controller.start(watcherChannel)
+	go controller.start(watcherChannel, closeChannel)
 	stop := make(chan os.Signal, 1)
 
 	signal.Notify(stop, os.Interrupt)
 	for {
 		select {
 		case index := <-watcherChannel:
+			time.Sleep(1 * time.Second)
 			if index == 1 {
 				go UIServer.Start(watcherChannel)
 			} else if index == 2 {
-				go controller.start(watcherChannel)
+				go controller.start(watcherChannel, closeChannel)
+			} else if index == 3 {
+				go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
 			}
+
 			log.Println("goroutine number", index, "just closed...")
 			break
 		case <-stop:
@@ -77,11 +122,72 @@ func main() {
 
 }
 
+func (b *Brain) MaintainLinkToBrain(watcherChannel chan int, closeChannel chan bool) {
+	defer func(watcherChannel chan int) {
+		if r := recover(); r != nil {
+			log.Println("Brain link crahed !!", r, string(debug.Stack()))
+		}
+		watcherChannel <- 3
+	}(watcherChannel)
+
+	// buf := make([]byte, 20000)
+	for {
+		log.Println("listening to brain ...")
+		// make a decoder
+		decoder := json.NewDecoder(b.Socket)
+
+		// try to decode a config
+		var config ControllerConfig
+
+		err := decoder.Decode(&config)
+		if err != nil || config.Collector.IP == "" {
+			log.Println("no config...")
+		} else if !config.Enabled {
+			log.Println(config)
+			log.Println("Brain told me to exit...")
+			os.Exit(1)
+		} else {
+			log.Println("Brain told me to restart ...")
+			GlobalController.Config = config
+			restartEverything(closeChannel)
+			continue
+		}
+
+	}
+}
+func restartEverything(closeChannel chan bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("crashed while restarting..", r, string(debug.Stack()))
+
+		}
+		GlobalController.SafeUnlock()
+	}()
+
+	UIHTTPsrv.Close()
+	GlobalController.Lock()
+	for _, v := range GlobalController.UI.ClientList {
+		if v != nil {
+			_ = v.Conn.Close()
+		}
+	}
+	for _, v := range GlobalController.Collectors {
+		if v != nil {
+			_ = v.Conn.Close()
+		}
+
+	}
+
+	GlobalController.Unlock()
+	closeChannel <- true
+}
+
 type Controller struct {
+	safelocker.SafeLocker
 	Buffer chan *DataPoint
 	// Recovery in sqlite?
 	//RecoveryFile string
-	Settings             *Settings
+	Config               ControllerConfig
 	BufferDirectoryPath  string
 	PORT                 string
 	IP                   string
@@ -146,20 +252,31 @@ func (c *Controller) RemoveCollector(TAG string) {
 	c.mutex.Unlock()
 }
 
-func (controller *Controller) start(watcherChannel chan int) {
+func (controller *Controller) start(watcherChannel chan int, closeChannel chan bool) {
 	defer func(watcherChannel chan int) {
 		if r := recover(); r != nil {
-			log.Println("controller crahed !!", r)
+			log.Println("controller crahed !!", r, string(debug.Stack()))
 		}
 		watcherChannel <- 2
 	}(watcherChannel)
-	helpers.DebugLog("listening on:", controller.Settings.IP+":"+controller.Settings.PORT)
-	ln, err := net.Listen("tcp", controller.Settings.IP+":"+controller.Settings.PORT)
+	helpers.DebugLog("listening on:", controller.Config.Collector.IP+":"+strconv.Itoa(controller.Config.Collector.Port))
+	ln, err := net.Listen("tcp", controller.Config.Collector.IP+":"+strconv.Itoa(controller.Config.Collector.Port))
 	helpers.PanicX(err)
 	for {
 		conn, err := ln.Accept()
+		log.Println("Checking close channel ...")
+		select {
+		case <-closeChannel:
+			log.Println("closing collector port..")
+			_ = ln.Close()
+			_ = conn.Close()
+			return
+		default:
+			log.Println("nothing to close ... ")
+		}
 		helpers.PanicX(err)
 		go receiveConnection(conn, controller)
+
 	}
 }
 
@@ -201,11 +318,11 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		controller.RemoveCollector(collector.TAG)
 	}()
 
-	msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
-	if !strings.Contains(string(msg), "H||") {
-		helpers.PanicX(errors.New("no host data found in handskae" + string(msg)))
-	}
-	helpers.DebugLog("HOST DATA:", string(msg))
+	// msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
+	// if !strings.Contains(string(msg), "H||") {
+	// 	helpers.PanicX(errors.New("no host data found in handshake" + string(msg)))
+	// }
+	// helpers.DebugLog("HOST DATA:", string(msg))
 
 	_, err = collector.Conn.Write([]byte("k\n"))
 	if err != nil {
@@ -221,24 +338,24 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 	reader := bufio.NewReader(collector.Conn)
 	// TODO: move all parsing into go routine ?
 	for {
-		// log.Println("loop one!")
 		controlBytes := make([]byte, 3)
 		_, err := reader.Read(controlBytes)
 		if err != nil {
-			panic(err)
+			log.Println("Closing Collector read pipe 1:", err)
+			collector.Conn.Close()
+			return
 		}
 		length := binary.LittleEndian.Uint16(controlBytes[0:2])
 		log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
 		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
-			panic(err)
+			log.Println("Closing Collector read pipe 2:", err)
+			collector.Conn.Close()
+			return
 		}
 
-		// does this data need to be duplicated ?!
-
-		go controller.saveData(collector.TAG, data, int(controlBytes[2]))
-		go controller.ParseData(collector.TAG, data, int(controlBytes[2]))
+		go controller.HandleDataPoint(collector.TAG, data, int(controlBytes[2]))
 
 	}
 
@@ -251,49 +368,28 @@ type DataPoint struct {
 	ControlByte int
 }
 
-func (c *Controller) saveData(tag string, data []byte, controlByte int) {
+func (c *Controller) HandleDataPoint(tag string, data []byte, controlByte int) {
+	var DPC DPCollection
+	if controlByte == 4 {
+		// log.Println("TIME:", timestamp)
+		// log.Println("FULL DATA:", data)
+		// log.Println("TAG:", tag, " CONTROL BYTE:", controlByte)
+		DPC = ParseMinimumDataPoint(data[8:])
+		DPC.Timestamp = binary.LittleEndian.Uint64(data[:8])
+		DPC.Tag = tag
+		DPC.ControlByte = controlByte
+		// log.Println(DPC)
+	}
 
-	//helpers.DebugLog("DATA:", msg)
+	c.UI.HistoryChannel <- DPC
+}
+
+func (c *Controller) saveData(tag string, data []byte, controlByte int) {
 	c.Buffer <- &DataPoint{
 		Value:       data,
 		Tag:         tag,
 		ControlByte: controlByte,
 	}
-}
-func (c *Controller) ParseData(tag string, data []byte, controlByte int) {
-
-	parsedPoint := ParseDataPoint(data[8:], tag)
-	// helpers.DebugLog("DATA:", parsedPoint.Values)
-	log.Println("-------------------------------------------------")
-	for i, v := range parsedPoint.Values {
-		log.Println(i, v)
-	}
-	log.Println("-------------------------------------------------")
-	collection := ParsedCollection{
-		DPS: parsedPoint.Values,
-		Tag: tag,
-	}
-	if controlByte == 1 {
-		collection.BasePoint = true
-		// LiveBuffer.CurrentBase[tag] = collection
-	}
-	// Send to UIS
-	c.UI.DPChan <- collection
-	for _, v := range parsedPoint.Values {
-		if LiveBuffer.CollectorStatsMap[tag] == nil || LiveBuffer.CurrentBase[tag] == nil {
-			LiveBuffer.CollectorStatsMap[tag] = make(map[string]int64)
-			LiveBuffer.CurrentBase[tag] = make(map[string]int64)
-		}
-		statIndex := strconv.Itoa(v.Index) + "." + strconv.Itoa(v.SubIndex)
-		if controlByte == 1 {
-			LiveBuffer.CurrentBase[tag][statIndex] = v.Value
-			// LiveBuffer.CollectorStatsMap[tag][statIndex] = v.Value
-		} else {
-			LiveBuffer.CollectorStatsMap[tag][statIndex] = LiveBuffer.CurrentBase[tag][statIndex] + v.Value
-		}
-	}
-	// log.Println(LiveBuffer.CurrentBase[tag]["5.0"], LiveBuffer.CollectorStatsMap[tag]["5.0"])
-	// log.Println(LiveBuffer.CollectorStatsMap)
 }
 func (c *Controller) EngageBufferPipe() {
 

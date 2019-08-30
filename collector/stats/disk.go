@@ -22,10 +22,11 @@ type DiskDynamic struct {
 	ValueList      []int64
 }
 
-func GetPercantageByte() byte {
+func GetDiskByte() byte {
 	diskStat, err := disk.Usage("/")
 	helpers.PanicX(err)
-	return byte(diskStat.UsedPercent)
+	// log.Println("SAVING DISK:", diskStat.UsedPercent, int8(diskStat.UsedPercent), byte(int8(diskStat.UsedPercent)))
+	return byte(int8(diskStat.UsedPercent))
 }
 func collectDiskDynamic(dp *DynamicPoint) {
 	// meow := disk.Partitions()

@@ -1,6 +1,8 @@
 package stats
 
 import (
+	"bytes"
+	"encoding/binary"
 	"io/ioutil"
 	"log"
 	"net"
@@ -52,6 +54,37 @@ type NetworkStatic struct {
 	Flags              string
 	MTU                int
 	Index              int
+}
+
+func GetNetworkBytes(history *HistoryBuffer) []byte {
+	var data []byte
+	netstuff, err := gonet.IOCounters(true)
+	helpers.PanicX(err)
+	for _, v := range netstuff {
+		History.MinimumStats.NetworkIn = History.MinimumStats.NetworkIn + v.BytesRecv
+		History.MinimumStats.NetworkOut = history.MinimumStats.NetworkOut + v.BytesSent
+	}
+
+	// return nothing if we have no previous history
+	if History.PreviousMinimumStats == nil {
+		var buffer = new(bytes.Buffer)
+		binary.Write(buffer, binary.LittleEndian, int64(0))
+		binary.Write(buffer, binary.LittleEndian, int64(0))
+		data = buffer.Bytes()
+		// log.Println("SAING NETWORK:", 0, 0, data)
+		return data
+	}
+
+	// bytes per second IN
+	InPerSecond := history.MinimumStats.NetworkIn - history.PreviousMinimumStats.NetworkIn
+	OutPerSecond := history.MinimumStats.NetworkOut - history.PreviousMinimumStats.NetworkOut
+
+	var buffer = new(bytes.Buffer)
+	binary.Write(buffer, binary.LittleEndian, int64(InPerSecond))
+	binary.Write(buffer, binary.LittleEndian, int64(OutPerSecond))
+	data = buffer.Bytes()
+	// log.Println("SAING NETWORK:", InPerSecond, OutPerSecond, data)
+	return data
 }
 
 func collectNetworkStats(sp *StaticPoint) {
