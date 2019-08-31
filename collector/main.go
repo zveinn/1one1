@@ -8,6 +8,7 @@ import (
 	"github.com/zkynetio/lynx/collector/processor"
 	"github.com/zkynetio/lynx/collector/stats"
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/lynx/namespaces"
 )
 
 func Start(tag string, address string) {
@@ -32,7 +33,7 @@ func Start(tag string, address string) {
 	watcherChannel := make(chan int)
 	go collector.MaintainControllerCommunications(watcherChannel)
 	go collector.CollectStats(watcherChannel)
-
+	namespaces.Init()
 	// todo
 	// go collector.SendStats()
 

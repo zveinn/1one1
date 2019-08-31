@@ -15,7 +15,7 @@ type Alerting struct {
 	Sms struct {
 	} `json:"sms"`
 	DefaultType string  `json:"default_type"`
-	Default     []Alert `json:"defaults"`
+	Default     []Alert `json:"default"`
 	Custom      []Alert `json:"custom"`
 }
 

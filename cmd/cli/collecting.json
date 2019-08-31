@@ -13,7 +13,7 @@
     ],
     "custom":[
         {
-            "tag":"*web*",
+            "tag":".web.",
             "indexes":[
                 "cpu.percentage",
                 "disk.percentage",

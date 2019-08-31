@@ -4,8 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"errors"
+	"encoding/json"
 	"log"
+	"math/rand"
 	"net"
 	"runtime/debug"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	stats "github.com/zkynetio/lynx/collector/stats"
 	helpers "github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/lynx/namespaces"
 )
 
 type Collector struct {
@@ -25,6 +27,7 @@ type Collector struct {
 	LastBasePointIndex int
 	CurrentPointIndex  int
 	CurrentStaticIndex int
+	Namespaces         map[int]string
 
 	mux sync.Mutex
 }
@@ -106,13 +109,11 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 		log.Println("Stopped maintining controllers...")
 	}(watcherChannel)
 	for {
-		// TODO: implement rand int sleeper
-		time.Sleep(1 * time.Second)
-		//helpers.DebugLog("5 second controller maintnance starting ...")
-		// log.Println("Number of controllers to maintain:", len(collector.Controllers))
+		rand.Seed(time.Now().UnixNano())
+		n := rand.Intn(3000)
+		time.Sleep(time.Duration(n+1000) * time.Millisecond)
 		for _, controller := range collector.Controllers {
 			if controller.Active {
-				// log.Println("Controller is already active...")
 				continue
 			}
 			log.Println("maintaining controller:", controller)
@@ -120,12 +121,10 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 				helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
 				continue
 			}
-			helpers.DebugLog("Recovered connection to:", controller.Address)
-			controller.ChangeActiveStatus(true)
 
 			helpers.DebugLog("Engaging controller listener to", controller.Address)
 			go controller.OpenSendChannel()
-			// sendBasePoint(collector, controller)
+			controller.ChangeActiveStatus(true)
 		}
 	}
 
@@ -150,6 +149,9 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		}
 		startTime = time.Now()
 		go func() {
+			defer func() {
+				_ = recover()
+			}()
 			// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 			var ControlByte byte
 			// if count%60 == 0 {
@@ -162,7 +164,7 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 			// 	collector.LastBasePointIndex = count
 			// 	count = collector.AddDataPoint(data)
 			// } else {
-			data = stats.GetMinimumStats()
+			data = stats.GetMinimumStats(collector.Namespaces)
 			// count = collector.AddDataPoint(data)
 			// control byte 4 means this is a minimal data point
 			ControlByte = 4
@@ -274,22 +276,27 @@ func dialController(controller *Controller) (err error) {
 func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
-	log.Println("HANDSHAKING!")
 	// data := stats.GetStaticBasePoint()
 	// _, err = controller.Conn.Write([]byte(data + "\n"))
 	// helpers.PanicX(err)
 
-	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
-	if msg != "k\n" || err != nil {
-		log.Println("Coult not handshake with controller", msg)
-		if err != nil {
-			return err
-		}
+	var ns []string
 
-		return errors.New("Could not handshake with controller")
+	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
+	log.Println(string(msg))
+	if err != nil {
+		log.Println("Coult not handshake with controller", msg)
+		controller.Conn.Close()
 	}
-	log.Println("DONE HANDSHAKING!")
-	controller.ChangeActiveStatus(true)
+	err = json.Unmarshal([]byte(msg), &ns)
+	if err != nil {
+		log.Println("Coult not handshake with controller", msg)
+		controller.Conn.Close()
+	}
+	log.Println("GOT THESE NAMESPACES FROM THE CONTROLLER:", ns)
+	c.Namespaces = namespaces.MakeMapFromNamespaces(ns)
+	log.Println("NAMESPACE MAP:", c.Namespaces)
+
 	return
 }
 func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err error) {
@@ -302,6 +309,7 @@ func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err er
 	if err != nil {
 		return
 	}
+	controller.ChangeActiveStatus(true)
 	return
 }
 func ConnectToControllers(address string, tag string, collector *Collector) {

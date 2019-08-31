@@ -7,7 +7,7 @@ import (
 )
 
 type Brain struct {
-	Config      Config
+	Config      Config                    `json:"-"`
 	Alerting    []alerting.Alerting       `json:"alerting"`
 	Collecting  Collecting                `json:"collecting"`
 	Controllers map[string]LiveController `json:"-"`

@@ -175,25 +175,40 @@ func (b *Brain) MaintainLinkToBrain(watcherChannel chan int, closeChannel chan b
 		if err != nil {
 			log.Println("Error reading data fom brain ...", err)
 		}
-		b.DecodeBrain(data)
-		b.DecodeConfig(closeChannel, data)
+
+		err = b.DecodeConfig(closeChannel, data)
+		if err == nil {
+			continue
+		}
+		err = b.DecodeBrain(data)
+		if err == nil {
+			continue
+		}
 
 	}
 }
-func (b *Brain) DecodeBrain(data []byte) {
+func (b *Brain) DecodeBrain(data []byte) error {
 	var brain Brain
+	// log.Println(string(data))
 	err := json.Unmarshal(data, &brain)
-	if err != nil || len(brain.Alerting) < 1 {
-		log.Println("no brain or missing parts..", err)
-	} else {
-		// log.Println("Brain", brain)
-		b.Lock()
-		b.Alerting = brain.Alerting
-		b.Collecting = brain.Collecting
-		b.Unlock()
+	if err != nil {
+		log.Println("could not decode brain", err)
+		return err
 	}
+	b.Lock()
+	if len(brain.Alerting) > 0 {
+		b.Alerting = brain.Alerting
+	}
+	if len(brain.Collecting.Custom) > 0 || len(brain.Collecting.Default) > 0 {
+		b.Collecting = brain.Collecting
+	}
+
+	b.Unlock()
+	log.Println(b.Collecting)
+	log.Println(b.Alerting)
+	return nil
 }
-func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
+func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("crashed while restarting..", r, string(debug.Stack()))
@@ -205,35 +220,38 @@ func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
 	// Decode the config
 	var config ControllerConfig
 	err := json.Unmarshal(data, &config)
-	if err != nil || config.Collector.IP == "" {
-		log.Println("no config...")
+	if err != nil {
+		log.Println(err)
+		return err
+	} else if config.IP == "" {
+		log.Println("IP missing, Assuming an errror")
+		return errors.New("IP missing, Assuming an errror")
 	} else if config.Shutdown {
 		log.Println("Brain told me to exit...")
 		os.Exit(1)
-	} else {
-		log.Println("Brain told me to restart ...")
-		if config.Restart {
-			rand.Seed(time.Now().UnixNano())
-			n := rand.Intn(5)
-			time.Sleep(time.Duration(n) * time.Second)
-			ui.UIHTTPsrv.Close()
-			GlobalController.Lock()
-			for _, v := range GlobalController.UIServer.ClientList {
-				if v != nil {
-					_ = v.Conn.Close()
-				}
+	} else if config.Restart {
+		rand.Seed(time.Now().UnixNano())
+		n := rand.Intn(5)
+		time.Sleep(time.Duration(n) * time.Second)
+		ui.UIHTTPsrv.Close()
+		GlobalController.Lock()
+		for _, v := range GlobalController.UIServer.ClientList {
+			if v != nil {
+				_ = v.Conn.Close()
 			}
-			for _, v := range GlobalController.Collectors {
-				if v != nil {
-					_ = v.Conn.Close()
-				}
-			}
-
-			GlobalController.Unlock()
-			closeChannel <- true
 		}
-		GlobalController.Config = config
+		for _, v := range GlobalController.Collectors {
+			if v != nil {
+				_ = v.Conn.Close()
+			}
+		}
+
+		GlobalController.Unlock()
+		closeChannel <- true
 	}
+
+	GlobalController.Config = config
+	return nil
 
 }
 
@@ -282,12 +300,12 @@ type Collector struct {
 
 func (c *Controller) AddCollector(TAG string, collector *Collector) error {
 	c.Lock()
+	defer c.Unlock()
 	if c.Collectors[TAG] != nil {
 		log.Println("A controller already exists with this tag:", TAG)
 		return errors.New("This TAG already exists")
 	}
 	c.Collectors[TAG] = collector
-	c.Unlock()
 	return nil
 }
 
@@ -346,6 +364,11 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	collector.TAG = strings.TrimSuffix(message, "\n")
 
+	defer func() {
+		helpers.DebugLog("Closing read pipe from", collector.TAG)
+		controller.RemoveCollector(collector.TAG)
+	}()
+
 	helpers.DebugLog("COLLECTOR:", collector.TAG)
 	err := controller.AddCollector(collector.TAG, collector)
 	if err != nil {
@@ -353,10 +376,6 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		_ = collector.Conn.Close()
 		return
 	}
-	defer func() {
-		helpers.DebugLog("Closing read pipe from", collector.TAG)
-		controller.RemoveCollector(collector.TAG)
-	}()
 
 	// msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
 	// if !strings.Contains(string(msg), "H||") {
@@ -364,7 +383,34 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 	// }
 	// helpers.DebugLog("HOST DATA:", string(msg))
 
-	_, err = collector.Conn.Write([]byte("k\n"))
+	var defaultIndexes []string
+	for _, v := range GlobalBrain.Collecting.Default {
+		if strings.Contains(collector.TAG, v.Tag) || v.Tag == "*" {
+			defaultIndexes = append(defaultIndexes, v.Indexes...)
+		}
+	}
+	var customIndexes []string
+	for _, v := range GlobalBrain.Collecting.Custom {
+
+		if strings.Contains(collector.TAG, v.Tag) {
+			customIndexes = append(customIndexes, v.Indexes...)
+		}
+	}
+
+	var indexes []string
+	if len(customIndexes) > 0 {
+		log.Println("USING CUSTOM INDEXES:", customIndexes)
+		indexes = customIndexes
+	} else {
+		log.Println("USING DEFAULT INDEXES:", defaultIndexes)
+		indexes = defaultIndexes
+	}
+	jsonIndexes, err := json.Marshal(indexes)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("SENDING INDEXES:", string(jsonIndexes))
+	_, err = collector.Conn.Write([]byte(string(jsonIndexes) + "\n"))
 	if err != nil {
 		helpers.DebugLog("could not establish coms with collector", err)
 		controller.RemoveCollector(collector.TAG)
@@ -409,6 +455,10 @@ type DataPoint struct {
 }
 
 func (c *Controller) HandleDataPoint(tag string, data []byte, controlByte int) {
+	defer func() {
+		// recover if we get a broken data point.
+		_ = recover()
+	}()
 	var DPC DPCollection
 	if controlByte == 4 {
 		// log.Println("TIME:", timestamp)

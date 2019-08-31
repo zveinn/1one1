@@ -141,7 +141,7 @@ func (c *LiveController) ListenToController(con []byte) {
 
 	go func() {
 		for {
-			time.Sleep(50000 * time.Millisecond)
+			time.Sleep(20000 * time.Millisecond)
 			log.Println("sending config again!")
 			var data = new(bytes.Buffer)
 			binary.Write(data, binary.LittleEndian, uint16(len(con)))
