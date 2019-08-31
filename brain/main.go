@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
@@ -139,19 +138,19 @@ func (b *Brain) acceptController(socket net.Conn) {
 }
 func (c *LiveController) ListenToController(con []byte) {
 
-	go func() {
-		for {
-			time.Sleep(20000 * time.Millisecond)
-			log.Println("sending config again!")
-			var data = new(bytes.Buffer)
-			binary.Write(data, binary.LittleEndian, uint16(len(con)))
-			data.Write(con)
-			_, err := data.WriteTo(c.Socket)
-			if err != nil {
-				return
-			}
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(20000 * time.Millisecond)
+	// 		log.Println("sending config again!")
+	// 		var data = new(bytes.Buffer)
+	// 		binary.Write(data, binary.LittleEndian, uint16(len(con)))
+	// 		data.Write(con)
+	// 		_, err := data.WriteTo(c.Socket)
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 	}
+	// }()
 	buf := make([]byte, 20000)
 	for {
 		n, err := c.Socket.Read(buf)

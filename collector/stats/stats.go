@@ -53,33 +53,28 @@ func InitStats() {
 	History = &HistoryBuffer{}
 }
 func GetMinimumStats(indexes map[int]string) []byte {
-	log.Println("Min stats..")
+	// log.Println("Min stats..")
 	History.MinimumStats = &MinimumStats{}
 	var data []byte
-	log.Println(indexes)
-	_, ok := indexes[1]
-	if ok {
+	// log.Println(indexes)
+	if _, ok := indexes[1]; ok {
 		data = append(data, GetCPUByte())
 	}
 
-	_, ok = indexes[2]
-	if ok {
+	if _, ok := indexes[2]; ok {
 		data = append(data, GetDiskByte())
 	}
 
-	_, ok = indexes[3]
-	if ok {
+	if _, ok := indexes[3]; ok {
 		data = append(data, GetMemoryByte())
 	}
 
 	networkData := GetNetworkBytes(History)
-	_, ok = indexes[4]
-	if ok {
-		data = append(data, networkData[0:8]...)
+	if _, ok := indexes[4]; ok {
+		data = append(data, networkData[0:int(networkData[0])+1]...)
 	}
-	_, ok = indexes[5]
-	if ok {
-		data = append(data, networkData[8:16]...)
+	if _, ok := indexes[5]; ok {
+		data = append(data, networkData[int(networkData[0])+1:]...)
 	}
 	log.Println("DATA:", data)
 	History.PreviousMinimumStats = History.MinimumStats

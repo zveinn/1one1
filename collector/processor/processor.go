@@ -144,13 +144,16 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	for {
 		var data []byte
 		if !time.Now().After(startTime.Add(1000 * time.Millisecond)) {
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 			continue
 		}
 		startTime = time.Now()
 		go func() {
 			defer func() {
-				_ = recover()
+				r := recover()
+				if r != nil {
+					log.Println("panic while sending stats:", r, string(debug.Stack()))
+				}
 			}()
 			// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
 			var ControlByte byte

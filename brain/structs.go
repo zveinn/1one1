@@ -19,12 +19,12 @@ type LiveController struct {
 
 type Collecting struct {
 	Default []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"default"`
 	Custom []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"custom"`
 }
 

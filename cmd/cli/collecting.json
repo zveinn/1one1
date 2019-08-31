@@ -2,7 +2,7 @@
     "default":[
         {
             "tag":"*",
-            "indexes":[
+            "namespaces":[
                 "cpu.percentage",
                 "disk.percentage",
                 "memory.percentage",
@@ -14,7 +14,7 @@
     "custom":[
         {
             "tag":".web.",
-            "indexes":[
+            "namespaces":[
                 "cpu.percentage",
                 "disk.percentage",
                 "memory.percentage"

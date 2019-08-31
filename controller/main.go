@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"net"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/lynx/namespaces"
 	"github.com/zkynetio/lynx/ui"
 	"github.com/zkynetio/safelocker"
 )
@@ -35,12 +37,12 @@ type Brain struct {
 }
 type Collecting struct {
 	Default []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"default"`
 	Custom []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"custom"`
 }
 type ControllerConfig struct {
@@ -60,6 +62,7 @@ type ControllerConfig struct {
 
 func Start(address string) {
 	rand.Seed(time.Now().Unix())
+	namespaces.Init()
 	Brain := Brain{
 		Address: address,
 	}
@@ -296,6 +299,7 @@ type Collector struct {
 	Conn        net.Conn
 	LastCheckin time.Time
 	SendChannel chan string
+	Namespaces  map[int]string
 }
 
 func (c *Controller) AddCollector(TAG string, collector *Collector) error {
@@ -361,8 +365,33 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 		Conn:        conn,
 	}, controller, message)
 }
+func findCollectorNamespaces(collector *Collector) (namespaces []string) {
+	var defaultNamespaces []string
+	for _, v := range GlobalBrain.Collecting.Default {
+		if strings.Contains(collector.TAG, v.Tag) || v.Tag == "*" {
+			defaultNamespaces = append(defaultNamespaces, v.Namespaces...)
+		}
+	}
+	var customNamespaces []string
+	for _, v := range GlobalBrain.Collecting.Custom {
+		if strings.Contains(collector.TAG, v.Tag) {
+			customNamespaces = append(customNamespaces, v.Namespaces...)
+		}
+	}
+
+	if len(customNamespaces) > 0 {
+		log.Println("USING CUSTOM INDEXES:", customNamespaces)
+		namespaces = customNamespaces
+	} else {
+		log.Println("USING DEFAULT INDEXES:", defaultNamespaces)
+		namespaces = defaultNamespaces
+	}
+	return
+}
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	collector.TAG = strings.TrimSuffix(message, "\n")
+	ns := findCollectorNamespaces(collector)
+	collector.Namespaces = namespaces.MakeMapFromNamespaces(ns)
 
 	defer func() {
 		helpers.DebugLog("Closing read pipe from", collector.TAG)
@@ -377,35 +406,7 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		return
 	}
 
-	// msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
-	// if !strings.Contains(string(msg), "H||") {
-	// 	helpers.PanicX(errors.New("no host data found in handshake" + string(msg)))
-	// }
-	// helpers.DebugLog("HOST DATA:", string(msg))
-
-	var defaultIndexes []string
-	for _, v := range GlobalBrain.Collecting.Default {
-		if strings.Contains(collector.TAG, v.Tag) || v.Tag == "*" {
-			defaultIndexes = append(defaultIndexes, v.Indexes...)
-		}
-	}
-	var customIndexes []string
-	for _, v := range GlobalBrain.Collecting.Custom {
-
-		if strings.Contains(collector.TAG, v.Tag) {
-			customIndexes = append(customIndexes, v.Indexes...)
-		}
-	}
-
-	var indexes []string
-	if len(customIndexes) > 0 {
-		log.Println("USING CUSTOM INDEXES:", customIndexes)
-		indexes = customIndexes
-	} else {
-		log.Println("USING DEFAULT INDEXES:", defaultIndexes)
-		indexes = defaultIndexes
-	}
-	jsonIndexes, err := json.Marshal(indexes)
+	jsonIndexes, err := json.Marshal(ns)
 	if err != nil {
 		panic(err)
 	}
@@ -432,7 +433,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 			return
 		}
 		length := binary.LittleEndian.Uint16(controlBytes[0:2])
-		log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
+		// log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
 		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
@@ -441,7 +442,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 			return
 		}
 
-		go controller.HandleDataPoint(collector.TAG, data, int(controlBytes[2]))
+		go controller.HandleDataPoint(collector, data, int(controlBytes[2]))
 
 	}
 
@@ -454,20 +455,29 @@ type DataPoint struct {
 	ControlByte int
 }
 
-func (c *Controller) HandleDataPoint(tag string, data []byte, controlByte int) {
+func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlByte int) {
 	defer func() {
 		// recover if we get a broken data point.
-		_ = recover()
+		r := recover()
+		if r != nil {
+			log.Println("panic!", r, string(debug.Stack()))
+		}
 	}()
 	var DPC DPCollection
 	if controlByte == 4 {
 		// log.Println("TIME:", timestamp)
 		// log.Println("FULL DATA:", data)
 		// log.Println("TAG:", tag, " CONTROL BYTE:", controlByte)
-		DPC = ParseMinimumDataPoint(data[8:])
 		DPC.Timestamp = binary.LittleEndian.Uint64(data[:8])
-		DPC.Tag = tag
+		DPC.Tag = collector.TAG
 		DPC.ControlByte = controlByte
+		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
+
+		log.Println()
+		for _, v := range DPC.DPS {
+			fmt.Print(v.Index, "/", v.Value, "  - ")
+		}
+
 		// log.Println(DPC)
 	}
 

@@ -21,6 +21,7 @@ func Start(tag string, address string) {
 	// the point map is only for debugging.
 	collector.PointMap = make(map[int][]byte)
 	collector.Controllers = make(map[string]*processor.Controller)
+	namespaces.Init()
 
 	processor.ConnectToControllers(
 		address,
@@ -33,7 +34,6 @@ func Start(tag string, address string) {
 	watcherChannel := make(chan int)
 	go collector.MaintainControllerCommunications(watcherChannel)
 	go collector.CollectStats(watcherChannel)
-	namespaces.Init()
 	// todo
 	// go collector.SendStats()
 
