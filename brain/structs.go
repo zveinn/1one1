@@ -1,4 +1,4 @@
-package main
+package brain
 
 import (
 	"net"
@@ -45,19 +45,19 @@ type Cluster struct {
 	Controllers []Controller
 }
 type Controller struct {
-	IP        string    `json:"ip"`
-	UI        UI        `json:"ui"`
-	Collector Collector `json:"collector"`
+	IP        string          `json:"ip"`
+	UI        UIConfig        `json:"ui"`
+	Collector CollectorConfig `json:"collector"`
 	Live      bool
 	Shutdown  bool `json:"shutdown"`
 	Debug     bool `json:"debug"`
 	Restart   bool `json:"restart"`
 }
-type Collector struct {
+type CollectorConfig struct {
 	IP   string `json:"ip"`
 	Port int    `json:"port"`
 }
-type UI struct {
+type UIConfig struct {
 	IP   string `json:"ip"`
 	Port int    `json:"port"`
 }

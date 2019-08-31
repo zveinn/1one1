@@ -1,4 +1,4 @@
-package main
+package brain
 
 import (
 	"bytes"
@@ -56,7 +56,7 @@ func ReadAlertingConfig(b *Brain) {
 		}
 	}
 }
-func main() {
+func Start() {
 
 	Brain := Brain{}
 	ReadBrainConfig(&Brain)
@@ -141,12 +141,15 @@ func (c *LiveController) ListenToController(con []byte) {
 
 	go func() {
 		for {
-			time.Sleep(20000 * time.Millisecond)
+			time.Sleep(50000 * time.Millisecond)
 			log.Println("sending config again!")
 			var data = new(bytes.Buffer)
 			binary.Write(data, binary.LittleEndian, uint16(len(con)))
 			data.Write(con)
-			data.WriteTo(c.Socket)
+			_, err := data.WriteTo(c.Socket)
+			if err != nil {
+				return
+			}
 		}
 	}()
 	buf := make([]byte, 20000)

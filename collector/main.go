@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"log"
@@ -10,32 +10,24 @@ import (
 	"github.com/zkynetio/lynx/helpers"
 )
 
-func main() {
-
-	helpers.LoadEnvironmentVariables()
+func Start(tag string, address string) {
 
 	// Initialize a new controller
 	collector := &processor.Collector{
-		TAG:          os.Getenv("TAG"),
-		RecoveryFile: os.Getenv("RCOVERYFILE"),
+		TAG: tag,
 	}
-	collector.GetIntervalsFromEnvironmentVariables()
 	defer collector.CleanupOnExit()
 	// the point map is only for debugging.
 	collector.PointMap = make(map[int][]byte)
 	collector.Controllers = make(map[string]*processor.Controller)
 
-	stats.InitStats()
-
-	tag := os.Getenv("TAG")
-	if os.Args[1] != "" {
-		tag = os.Args[1]
-	}
 	processor.ConnectToControllers(
-		os.Getenv("CONTROLLERS"),
+		address,
 		tag,
 		collector,
 	)
+
+	stats.InitStats()
 
 	watcherChannel := make(chan int)
 	go collector.MaintainControllerCommunications(watcherChannel)

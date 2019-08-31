@@ -7,10 +7,7 @@ import (
 	"errors"
 	"log"
 	"net"
-	"os"
 	"runtime/debug"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -28,17 +25,10 @@ type Collector struct {
 	LastBasePointIndex int
 	CurrentPointIndex  int
 	CurrentStaticIndex int
-	MaintainerInterval int
-	ListenerInterval   int
-	CollectionInterval int
-	mux                sync.Mutex
+
+	mux sync.Mutex
 }
 
-// 60 * 60 = 3600 data points = 1 hour
-// x 48 = 172.800 = 2 days ( 48 hours )
-// asuming each data point is 200 bytes
-// we need 34.560.000 or 34,56MB of memory to store
-// 48 hours worth of stats.
 func (c *Collector) AddDataPoint(point []byte) (count int) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
@@ -52,30 +42,6 @@ func (c *Collector) AddDataPoint(point []byte) (count int) {
 	return c.CurrentPointIndex
 }
 
-func (c *Collector) GetIntervalsFromEnvironmentVariables() {
-	// set listener interval
-	listenerInterval, err := strconv.Atoi(os.Getenv("LISTENER_INTERVAL"))
-	if err != nil {
-		helpers.DebugLog("Error setting listener interval, default valur selected", err)
-		listenerInterval = 5
-	}
-	c.ListenerInterval = listenerInterval
-
-	// set maintainer interval
-	maintainerInterval, err := strconv.Atoi(os.Getenv("MAINTAINER_INTERVAL"))
-	if err != nil {
-		helpers.DebugLog("Error setting maintainer interval, default value selected", err)
-		maintainerInterval = 5
-	}
-	c.MaintainerInterval = maintainerInterval
-
-	CollectionInterval, err := strconv.Atoi(os.Getenv("COLLECTION_INTERVAL"))
-	if err != nil {
-		helpers.DebugLog("Error setting collection interval, default value selected", err)
-		maintainerInterval = 5
-	}
-	c.CollectionInterval = CollectionInterval
-}
 func (c *Collector) AddController(cont *Controller) {
 	c.mutex.Lock()
 	c.Controllers[cont.Address] = cont
@@ -141,15 +107,15 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 	}(watcherChannel)
 	for {
 		// TODO: implement rand int sleeper
-		time.Sleep(time.Duration(collector.MaintainerInterval) * time.Second)
+		time.Sleep(1 * time.Second)
 		//helpers.DebugLog("5 second controller maintnance starting ...")
-		log.Println("Number of controllers to maintain:", len(collector.Controllers))
+		// log.Println("Number of controllers to maintain:", len(collector.Controllers))
 		for _, controller := range collector.Controllers {
-			log.Println("maintaining controller:", controller)
 			if controller.Active {
-				log.Println("Controller is already active...")
+				// log.Println("Controller is already active...")
 				continue
 			}
+			log.Println("maintaining controller:", controller)
 			if err := collector.dialAndHandshake(controller, collector.TAG); err != nil {
 				helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
 				continue
@@ -179,7 +145,7 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	for {
 		var data []byte
 		if !time.Now().After(startTime.Add(1000 * time.Millisecond)) {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 			continue
 		}
 		startTime = time.Now()
@@ -338,20 +304,14 @@ func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err er
 	}
 	return
 }
-func ConnectToControllers(controllers string, tag string, collector *Collector) {
-	for _, v := range strings.Split(controllers, ",") {
-		controller := &Controller{Address: v, Active: false}
-		collector.AddController(controller)
-
-		helpers.DebugLog("Connecting to:", v)
-		if err := collector.dialAndHandshake(controller, tag); err != nil {
-			helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
-			// TODO: make sure this won't hurt functionality later on...
-			// collector.RemoveController(controller)
-			continue
-		}
-		helpers.DebugLog("Connected to:", controller.Address)
-		go controller.OpenSendChannel()
-		// sendBasePoint(collector, controller)
+func ConnectToControllers(address string, tag string, collector *Collector) {
+	controller := &Controller{Address: address, Active: false}
+	collector.AddController(controller)
+	helpers.DebugLog("Connecting to:", controller)
+	if err := collector.dialAndHandshake(controller, tag); err != nil {
+		helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
+		return
 	}
+	helpers.DebugLog("Connected to:", controller.Address)
+	go controller.OpenSendChannel()
 }

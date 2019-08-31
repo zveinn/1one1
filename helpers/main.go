@@ -3,11 +3,8 @@ package helpers
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"strconv"
-
-	"github.com/joho/godotenv"
 )
 
 func DebugLog(v ...interface{}) {
@@ -21,13 +18,6 @@ func PanicX(err error) {
 	}
 }
 
-func LoadEnvironmentVariables() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Error loading .env file")
-	}
-}
 func writeTo(buf *bytes.Buffer, value interface{}) {
 	err := binary.Write(buf, binary.LittleEndian, value)
 	if err != nil {

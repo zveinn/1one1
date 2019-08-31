@@ -1,4 +1,4 @@
-package main
+package controller
 
 import (
 	"bufio"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/lynx/ui"
 	"github.com/zkynetio/safelocker"
 )
 
@@ -57,10 +58,10 @@ type ControllerConfig struct {
 	}
 }
 
-func main() {
+func Start(address string) {
 	rand.Seed(time.Now().Unix())
 	Brain := Brain{
-		Address: os.Args[1],
+		Address: address,
 	}
 	GlobalBrain = &Brain
 	socket, err := net.Dial("tcp", Brain.Address)
@@ -93,28 +94,25 @@ func main() {
 	Brain.Socket = socket
 	Brain.SendChannel = make(chan []byte, 10000)
 
-	UIServer := &UIServer{
-		ClientList:     make(map[string]*UI),
-		DPChan:         make(chan []byte, 1000000),
-		HistoryChannel: make(chan DPCollection, 100000),
-		IP:             config.UI.IP,
-		Port:           strconv.Itoa(config.UI.Port),
-	}
+	UIServer := ui.NewUIServer()
+	UIServer.ClientList = make(map[string]*ui.UI)
+	UIServer.IP = config.UI.IP
+	UIServer.Port = strconv.Itoa(config.UI.Port)
 
 	controller := Controller{
-		Config:               config,
-		Collectors:           make(map[string]*Collector),
-		Buffer:               make(chan *DataPoint, 1000000),
-		BufferDirectoryPath:  "./buffers/",
-		MinLinesInBufferFile: 10,
-		UI:                   UIServer,
+		Config:     config,
+		Collectors: make(map[string]*Collector),
+		Buffer:     make(chan *DataPoint, 1000000),
+		UIServer:   UIServer,
 	}
 	// os.Exit(1)
 	watcherChannel := make(chan int, 10)
 	closeChannel := make(chan bool, 10)
 	go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
-	go UIServer.ShipToUIS()
-	go UIServer.SaveToUIBuffer()
+	controller.UISendChannel = make(chan []byte, 1000000)
+	controller.UIParseChannel = make(chan DPCollection, 100000)
+	go ShipToUIS(controller.UISendChannel)
+	go SaveToUIBuffer(controller.UIParseChannel, controller.UISendChannel)
 
 	GlobalController = &controller
 
@@ -199,9 +197,9 @@ func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("crashed while restarting..", r, string(debug.Stack()))
-
+			GlobalController.SafeUnlock()
 		}
-		GlobalController.SafeUnlock()
+
 	}()
 
 	// Decode the config
@@ -215,9 +213,12 @@ func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
 	} else {
 		log.Println("Brain told me to restart ...")
 		if config.Restart {
-			UIHTTPsrv.Close()
+			rand.Seed(time.Now().UnixNano())
+			n := rand.Intn(5)
+			time.Sleep(time.Duration(n) * time.Second)
+			ui.UIHTTPsrv.Close()
 			GlobalController.Lock()
-			for _, v := range GlobalController.UI.ClientList {
+			for _, v := range GlobalController.UIServer.ClientList {
 				if v != nil {
 					_ = v.Conn.Close()
 				}
@@ -241,15 +242,14 @@ type Controller struct {
 	Buffer chan *DataPoint
 	// Recovery in sqlite?
 	//RecoveryFile string
-	Config               ControllerConfig
-	BufferDirectoryPath  string
-	PORT                 string
-	IP                   string
-	Collectors           map[string]*Collector
-	UIs                  map[string]*UI
-	mutex                sync.Mutex
-	MinLinesInBufferFile int
-	UI                   *UIServer
+	Config         ControllerConfig
+	PORT           string
+	IP             string
+	Collectors     map[string]*Collector
+	UIs            map[string]*ui.UI
+	UIServer       *ui.UIServer
+	UIParseChannel chan DPCollection
+	UISendChannel  chan []byte
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
@@ -278,32 +278,23 @@ type Collector struct {
 	Conn        net.Conn
 	LastCheckin time.Time
 	SendChannel chan string
-	Stats       *CollectorStats
-}
-type CollectorStats struct {
-	Host              string
-	AvailableDisk     int64
-	AvailableMemory   int64
-	AvalableBandwidth int64
-	MaxAvail          map[string]int64
-	// todo.. add more max values
 }
 
 func (c *Controller) AddCollector(TAG string, collector *Collector) error {
-	c.mutex.Lock()
+	c.Lock()
 	if c.Collectors[TAG] != nil {
 		log.Println("A controller already exists with this tag:", TAG)
 		return errors.New("This TAG already exists")
 	}
 	c.Collectors[TAG] = collector
-	c.mutex.Unlock()
+	c.Unlock()
 	return nil
 }
 
 func (c *Controller) RemoveCollector(TAG string) {
-	c.mutex.Lock()
+	c.Lock()
 	c.Collectors[TAG] = nil
-	c.mutex.Unlock()
+	c.Unlock()
 }
 
 func (controller *Controller) start(watcherChannel chan int, closeChannel chan bool) {
@@ -350,11 +341,6 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	connectCollector(&Collector{
 		LastCheckin: time.Now(),
 		Conn:        conn,
-		Stats: &CollectorStats{
-			// TODO, get from collector
-			AvalableBandwidth: 1250000000,
-			MaxAvail:          make(map[string]int64),
-		},
 	}, controller, message)
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
@@ -435,7 +421,7 @@ func (c *Controller) HandleDataPoint(tag string, data []byte, controlByte int) {
 		// log.Println(DPC)
 	}
 
-	c.UI.HistoryChannel <- DPC
+	c.UIParseChannel <- DPC
 }
 
 func (c *Controller) saveData(tag string, data []byte, controlByte int) {

@@ -1,9 +1,25 @@
-package main
+package controller
 
 import (
 	"encoding/binary"
 	"log"
 )
+
+type ParsedDataPointValues struct {
+	Values []*ParsedDataPoint
+}
+type ParsedCollection struct {
+	Tag       string
+	DPS       []*ParsedDataPoint
+	BasePoint bool
+}
+type ParsedDataPoint struct {
+	SubIndex int
+	Index    int
+	Tag      string
+	Value    int64
+	Group    string
+}
 
 func getData(headerValue int, data []byte, valuePointer int) (index, size int, value int64) {
 	index, size = findOrderAndSize(headerValue)
