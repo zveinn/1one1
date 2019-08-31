@@ -1,0 +1,24 @@
+{
+    "default":[
+        {
+            "tag":"*",
+            "indexes":[
+                "cpu.percentage",
+                "disk.percentage",
+                "memory.percentage",
+                "network.in",
+                "network.out"
+            ]
+        }
+    ],
+    "custom":[
+        {
+            "tag":"*web*",
+            "indexes":[
+                "cpu.percentage",
+                "disk.percentage",
+                "memory.percentage"
+            ]
+        }
+    ]
+}

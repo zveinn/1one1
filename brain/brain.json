@@ -1,0 +1,22 @@
+{
+  "ip":"127.0.0.1",
+  "port":6660,
+  "ui":{
+    "ip":"127.0.0.1",
+    "port":6661
+  },
+  "user":"",
+  "pass":"",
+  "clusters":[
+    {
+      "tag":"some-project",
+      "controllers":[
+        {"restart":true,"shutdown":false,"debug":true,"ip":"127.0.0.1","collector":{"ip":"127.0.0.1","port":6670},"ui":{"ip":"127.0.0.1","port":6671}}
+      ]
+    }
+  ],
+  "alertingConfigs":[ 
+    "https://github.com/username/repo/file"
+  ]
+
+}
