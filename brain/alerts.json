@@ -6,9 +6,10 @@
     "pagerduty":{},
     "sms":{},
     "default_type":"slack",
-    "defaults":[
+    "default":[
         {"tag":"*","namespace":"cpu.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]},
         {"tag":"*","namespace":"disk.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]},
         {"tag":"*","namespace":"memory.percentage","value":90,"time":"30s","count":1,"color":"red","to":["default"]}
-    ]
+    ],
+    "custom":[]
 }

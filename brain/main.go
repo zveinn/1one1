@@ -13,31 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
-	"github.com/zkynetio/safelocker"
 )
-
-type ActiveAlert struct {
-	Namespace string
-	Count     int
-	Triggerd  uint64
-}
-type AlertBucket struct {
-	safelocker.SafeLocker
-	// tag // namespace // count // first trigger ( time )
-	ActiveAlert map[string]ActiveAlert
-}
-
-func (a *AlertBucket) AddAlert(alert ActiveAlert, tag string) {
-	a.Lock()
-	defer a.Unlock()
-	a.ActiveAlert[tag] = alert
-}
-func (a *AlertBucket) RemoveAlert(tag string) {
-	a.Lock()
-	defer a.Unlock()
-	delete(a.ActiveAlert, tag)
-}
 
 func ReadCollectionConfig(b *Brain) {
 	file, err := ioutil.ReadFile("collecting.json")
@@ -71,7 +49,7 @@ func ReadAlertingConfig(b *Brain) {
 				panic(err)
 			}
 
-			data := Alerting{}
+			data := alerting.Alerting{}
 			_ = json.Unmarshal([]byte(file), &data)
 			b.Alerting = append(b.Alerting, data)
 			// b.Alerting[data.Name] = data

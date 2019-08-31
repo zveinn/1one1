@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
 	"github.com/zkynetio/safelocker"
 )
@@ -28,8 +29,8 @@ type Brain struct {
 	Socket      net.Conn
 	Address     string
 	SendChannel chan []byte
-	Alerting    []Alerting `json:"alerting"`
-	Collecting  Collecting `json:"collecting"`
+	Alerting    []alerting.Alerting `json:"alerting"`
+	Collecting  Collecting          `json:"collecting"`
 }
 type Collecting struct {
 	Default []struct {
@@ -54,30 +55,6 @@ type ControllerConfig struct {
 		IP   string
 		Port int
 	}
-}
-
-type Alerting struct {
-	Name  string `json:"name"`
-	Slack struct {
-	} `json:"slack"`
-	Email struct {
-	} `json:"email"`
-	Irc struct {
-	} `json:"irc"`
-	Pagerduty struct {
-	} `json:"pagerduty"`
-	Sms struct {
-	} `json:"sms"`
-	DefaultType string `json:"default_type"`
-	Defaults    []struct {
-		Tag       string   `json:"tag"`
-		Namespace string   `json:"namespace"`
-		Value     int      `json:"value"`
-		Time      string   `json:"time"`
-		Count     int      `json:"count"`
-		Color     string   `json:"color"`
-		To        []string `json:"to"`
-	} `json:"defaults"`
 }
 
 func main() {

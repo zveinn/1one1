@@ -1,10 +1,14 @@
 package main
 
-import "net"
+import (
+	"net"
+
+	"github.com/zkynetio/lynx/alerting"
+)
 
 type Brain struct {
 	Config      Config
-	Alerting    []Alerting                `json:"alerting"`
+	Alerting    []alerting.Alerting       `json:"alerting"`
 	Collecting  Collecting                `json:"collecting"`
 	Controllers map[string]LiveController `json:"-"`
 }
@@ -22,29 +26,6 @@ type Collecting struct {
 		Tag     string   `json:"tag"`
 		Indexes []string `json:"indexes"`
 	} `json:"custom"`
-}
-type Alerting struct {
-	Name  string `json:"name"`
-	Slack struct {
-	} `json:"slack"`
-	Email struct {
-	} `json:"email"`
-	Irc struct {
-	} `json:"irc"`
-	Pagerduty struct {
-	} `json:"pagerduty"`
-	Sms struct {
-	} `json:"sms"`
-	DefaultType string `json:"default_type"`
-	Defaults    []struct {
-		Tag       string   `json:"tag"`
-		Namespace string   `json:"namespace"`
-		Value     int      `json:"value"`
-		Time      string   `json:"time"`
-		Count     int      `json:"count"`
-		Color     string   `json:"color"`
-		To        []string `json:"to"`
-	} `json:"defaults"`
 }
 
 type Config struct {
