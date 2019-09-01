@@ -52,14 +52,31 @@ type HistoryBuffer struct {
 func InitStats() {
 	History = &HistoryBuffer{}
 }
-func GetMinimumStats() []byte {
-	log.Println("Min stats..")
+func GetMinimumStats(indexes map[int]string) []byte {
+	// log.Println("Min stats..")
 	History.MinimumStats = &MinimumStats{}
 	var data []byte
-	data = append(data, GetCPUByte())
-	data = append(data, GetDiskByte())
-	data = append(data, GetMemoryByte())
-	data = append(data, GetNetworkBytes(History)...)
+	// log.Println(indexes)
+	if _, ok := indexes[1]; ok {
+		data = append(data, GetCPUByte())
+	}
+
+	if _, ok := indexes[2]; ok {
+		data = append(data, GetDiskByte())
+	}
+
+	if _, ok := indexes[3]; ok {
+		data = append(data, GetMemoryByte())
+	}
+
+	networkData := GetNetworkBytes(History)
+	if _, ok := indexes[4]; ok {
+		data = append(data, networkData[0:int(networkData[0])+1]...)
+	}
+	if _, ok := indexes[5]; ok {
+		data = append(data, networkData[int(networkData[0])+1:]...)
+	}
+	log.Println("DATA:", data)
 	History.PreviousMinimumStats = History.MinimumStats
 	return data
 }

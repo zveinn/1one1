@@ -2,7 +2,6 @@ package stats
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io/ioutil"
 	"log"
 	"net"
@@ -67,22 +66,26 @@ func GetNetworkBytes(history *HistoryBuffer) []byte {
 
 	// return nothing if we have no previous history
 	if History.PreviousMinimumStats == nil {
-		var buffer = new(bytes.Buffer)
-		binary.Write(buffer, binary.LittleEndian, int64(0))
-		binary.Write(buffer, binary.LittleEndian, int64(0))
-		data = buffer.Bytes()
 		// log.Println("SAING NETWORK:", 0, 0, data)
-		return data
+		return []byte{byte(0), byte(0)}
 	}
 
 	// bytes per second IN
 	InPerSecond := history.MinimumStats.NetworkIn - history.PreviousMinimumStats.NetworkIn
 	OutPerSecond := history.MinimumStats.NetworkOut - history.PreviousMinimumStats.NetworkOut
+	// log.Println("N I/O", InPerSecond, OutPerSecond)
+	var inBuffer = new(bytes.Buffer)
+	lengthIN := helpers.WriteIntToBuffer(inBuffer, int64(InPerSecond))
+	data = append(data, byte(lengthIN))
+	data = append(data, inBuffer.Bytes()...)
+	var outBuffer = new(bytes.Buffer)
+	LengthOut := helpers.WriteIntToBuffer(outBuffer, int64(OutPerSecond))
+	data = append(data, byte(LengthOut))
+	data = append(data, outBuffer.Bytes()...)
+	// log.Println("POST NETWORK:", data)
+	// binary.Write(buffer, binary.LittleEndian, int32(InPerSecond))
+	// binary.Write(buffer, binary.LittleEndian, int32(OutPerSecond))
 
-	var buffer = new(bytes.Buffer)
-	binary.Write(buffer, binary.LittleEndian, int64(InPerSecond))
-	binary.Write(buffer, binary.LittleEndian, int64(OutPerSecond))
-	data = buffer.Bytes()
 	// log.Println("SAING NETWORK:", InPerSecond, OutPerSecond, data)
 	return data
 }

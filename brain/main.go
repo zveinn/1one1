@@ -1,4 +1,4 @@
-package main
+package brain
 
 import (
 	"bytes"
@@ -11,33 +11,10 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
-	"github.com/zkynetio/safelocker"
 )
-
-type ActiveAlert struct {
-	Namespace string
-	Count     int
-	Triggerd  uint64
-}
-type AlertBucket struct {
-	safelocker.SafeLocker
-	// tag // namespace // count // first trigger ( time )
-	ActiveAlert map[string]ActiveAlert
-}
-
-func (a *AlertBucket) AddAlert(alert ActiveAlert, tag string) {
-	a.Lock()
-	defer a.Unlock()
-	a.ActiveAlert[tag] = alert
-}
-func (a *AlertBucket) RemoveAlert(tag string) {
-	a.Lock()
-	defer a.Unlock()
-	delete(a.ActiveAlert, tag)
-}
 
 func ReadCollectionConfig(b *Brain) {
 	file, err := ioutil.ReadFile("collecting.json")
@@ -71,14 +48,14 @@ func ReadAlertingConfig(b *Brain) {
 				panic(err)
 			}
 
-			data := Alerting{}
+			data := alerting.Alerting{}
 			_ = json.Unmarshal([]byte(file), &data)
 			b.Alerting = append(b.Alerting, data)
 			// b.Alerting[data.Name] = data
 		}
 	}
 }
-func main() {
+func Start() {
 
 	Brain := Brain{}
 	ReadBrainConfig(&Brain)
@@ -161,16 +138,19 @@ func (b *Brain) acceptController(socket net.Conn) {
 }
 func (c *LiveController) ListenToController(con []byte) {
 
-	go func() {
-		for {
-			time.Sleep(20000 * time.Millisecond)
-			log.Println("sending config again!")
-			var data = new(bytes.Buffer)
-			binary.Write(data, binary.LittleEndian, uint16(len(con)))
-			data.Write(con)
-			data.WriteTo(c.Socket)
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(20000 * time.Millisecond)
+	// 		log.Println("sending config again!")
+	// 		var data = new(bytes.Buffer)
+	// 		binary.Write(data, binary.LittleEndian, uint16(len(con)))
+	// 		data.Write(con)
+	// 		_, err := data.WriteTo(c.Socket)
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 	}
+	// }()
 	buf := make([]byte, 20000)
 	for {
 		n, err := c.Socket.Read(buf)

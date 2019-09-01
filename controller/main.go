@@ -1,10 +1,11 @@
-package main
+package controller
 
 import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"net"
@@ -16,7 +17,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
+	"github.com/zkynetio/lynx/namespaces"
+	"github.com/zkynetio/lynx/ui"
 	"github.com/zkynetio/safelocker"
 )
 
@@ -28,17 +32,17 @@ type Brain struct {
 	Socket      net.Conn
 	Address     string
 	SendChannel chan []byte
-	Alerting    []Alerting `json:"alerting"`
-	Collecting  Collecting `json:"collecting"`
+	Alerting    []alerting.Alerting `json:"alerting"`
+	Collecting  Collecting          `json:"collecting"`
 }
 type Collecting struct {
 	Default []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"default"`
 	Custom []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"custom"`
 }
 type ControllerConfig struct {
@@ -56,34 +60,11 @@ type ControllerConfig struct {
 	}
 }
 
-type Alerting struct {
-	Name  string `json:"name"`
-	Slack struct {
-	} `json:"slack"`
-	Email struct {
-	} `json:"email"`
-	Irc struct {
-	} `json:"irc"`
-	Pagerduty struct {
-	} `json:"pagerduty"`
-	Sms struct {
-	} `json:"sms"`
-	DefaultType string `json:"default_type"`
-	Defaults    []struct {
-		Tag       string   `json:"tag"`
-		Namespace string   `json:"namespace"`
-		Value     int      `json:"value"`
-		Time      string   `json:"time"`
-		Count     int      `json:"count"`
-		Color     string   `json:"color"`
-		To        []string `json:"to"`
-	} `json:"defaults"`
-}
-
-func main() {
+func Start(address string) {
 	rand.Seed(time.Now().Unix())
+	namespaces.Init()
 	Brain := Brain{
-		Address: os.Args[1],
+		Address: address,
 	}
 	GlobalBrain = &Brain
 	socket, err := net.Dial("tcp", Brain.Address)
@@ -116,28 +97,25 @@ func main() {
 	Brain.Socket = socket
 	Brain.SendChannel = make(chan []byte, 10000)
 
-	UIServer := &UIServer{
-		ClientList:     make(map[string]*UI),
-		DPChan:         make(chan []byte, 1000000),
-		HistoryChannel: make(chan DPCollection, 100000),
-		IP:             config.UI.IP,
-		Port:           strconv.Itoa(config.UI.Port),
-	}
+	UIServer := ui.NewUIServer()
+	UIServer.ClientList = make(map[string]*ui.UI)
+	UIServer.IP = config.UI.IP
+	UIServer.Port = strconv.Itoa(config.UI.Port)
 
 	controller := Controller{
-		Config:               config,
-		Collectors:           make(map[string]*Collector),
-		Buffer:               make(chan *DataPoint, 1000000),
-		BufferDirectoryPath:  "./buffers/",
-		MinLinesInBufferFile: 10,
-		UI:                   UIServer,
+		Config:     config,
+		Collectors: make(map[string]*Collector),
+		Buffer:     make(chan *DataPoint, 1000000),
+		UIServer:   UIServer,
 	}
 	// os.Exit(1)
 	watcherChannel := make(chan int, 10)
 	closeChannel := make(chan bool, 10)
 	go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
-	go UIServer.ShipToUIS()
-	go UIServer.SaveToUIBuffer()
+	controller.UISendChannel = make(chan []byte, 1000000)
+	controller.UIParseChannel = make(chan DPCollection, 100000)
+	go ShipToUIS(controller.UISendChannel)
+	go SaveToUIBuffer(controller.UIParseChannel, controller.UISendChannel)
 
 	GlobalController = &controller
 
@@ -200,62 +178,83 @@ func (b *Brain) MaintainLinkToBrain(watcherChannel chan int, closeChannel chan b
 		if err != nil {
 			log.Println("Error reading data fom brain ...", err)
 		}
-		b.DecodeBrain(data)
-		b.DecodeConfig(closeChannel, data)
+
+		err = b.DecodeConfig(closeChannel, data)
+		if err == nil {
+			continue
+		}
+		err = b.DecodeBrain(data)
+		if err == nil {
+			continue
+		}
 
 	}
 }
-func (b *Brain) DecodeBrain(data []byte) {
+func (b *Brain) DecodeBrain(data []byte) error {
 	var brain Brain
+	// log.Println(string(data))
 	err := json.Unmarshal(data, &brain)
-	if err != nil || len(brain.Alerting) < 1 {
-		log.Println("no brain or missing parts..", err)
-	} else {
-		// log.Println("Brain", brain)
-		b.Lock()
-		b.Alerting = brain.Alerting
-		b.Collecting = brain.Collecting
-		b.Unlock()
+	if err != nil {
+		log.Println("could not decode brain", err)
+		return err
 	}
+	b.Lock()
+	if len(brain.Alerting) > 0 {
+		b.Alerting = brain.Alerting
+	}
+	if len(brain.Collecting.Custom) > 0 || len(brain.Collecting.Default) > 0 {
+		b.Collecting = brain.Collecting
+	}
+
+	b.Unlock()
+	log.Println(b.Collecting)
+	log.Println(b.Alerting)
+	return nil
 }
-func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) {
+func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("crashed while restarting..", r, string(debug.Stack()))
-
+			GlobalController.SafeUnlock()
 		}
-		GlobalController.SafeUnlock()
+
 	}()
 
 	// Decode the config
 	var config ControllerConfig
 	err := json.Unmarshal(data, &config)
-	if err != nil || config.Collector.IP == "" {
-		log.Println("no config...")
+	if err != nil {
+		log.Println(err)
+		return err
+	} else if config.IP == "" {
+		log.Println("IP missing, Assuming an errror")
+		return errors.New("IP missing, Assuming an errror")
 	} else if config.Shutdown {
 		log.Println("Brain told me to exit...")
 		os.Exit(1)
-	} else {
-		log.Println("Brain told me to restart ...")
-		if config.Restart {
-			UIHTTPsrv.Close()
-			GlobalController.Lock()
-			for _, v := range GlobalController.UI.ClientList {
-				if v != nil {
-					_ = v.Conn.Close()
-				}
+	} else if config.Restart {
+		rand.Seed(time.Now().UnixNano())
+		n := rand.Intn(5)
+		time.Sleep(time.Duration(n) * time.Second)
+		ui.UIHTTPsrv.Close()
+		GlobalController.Lock()
+		for _, v := range GlobalController.UIServer.ClientList {
+			if v != nil {
+				_ = v.Conn.Close()
 			}
-			for _, v := range GlobalController.Collectors {
-				if v != nil {
-					_ = v.Conn.Close()
-				}
-			}
-
-			GlobalController.Unlock()
-			closeChannel <- true
 		}
-		GlobalController.Config = config
+		for _, v := range GlobalController.Collectors {
+			if v != nil {
+				_ = v.Conn.Close()
+			}
+		}
+
+		GlobalController.Unlock()
+		closeChannel <- true
 	}
+
+	GlobalController.Config = config
+	return nil
 
 }
 
@@ -264,15 +263,14 @@ type Controller struct {
 	Buffer chan *DataPoint
 	// Recovery in sqlite?
 	//RecoveryFile string
-	Config               ControllerConfig
-	BufferDirectoryPath  string
-	PORT                 string
-	IP                   string
-	Collectors           map[string]*Collector
-	UIs                  map[string]*UI
-	mutex                sync.Mutex
-	MinLinesInBufferFile int
-	UI                   *UIServer
+	Config         ControllerConfig
+	PORT           string
+	IP             string
+	Collectors     map[string]*Collector
+	UIs            map[string]*ui.UI
+	UIServer       *ui.UIServer
+	UIParseChannel chan DPCollection
+	UISendChannel  chan []byte
 }
 type Collection struct {
 	// instace,namespace,[year.month.day.hour.minute.second],[]byte
@@ -301,32 +299,24 @@ type Collector struct {
 	Conn        net.Conn
 	LastCheckin time.Time
 	SendChannel chan string
-	Stats       *CollectorStats
-}
-type CollectorStats struct {
-	Host              string
-	AvailableDisk     int64
-	AvailableMemory   int64
-	AvalableBandwidth int64
-	MaxAvail          map[string]int64
-	// todo.. add more max values
+	Namespaces  map[int]string
 }
 
 func (c *Controller) AddCollector(TAG string, collector *Collector) error {
-	c.mutex.Lock()
+	c.Lock()
+	defer c.Unlock()
 	if c.Collectors[TAG] != nil {
 		log.Println("A controller already exists with this tag:", TAG)
 		return errors.New("This TAG already exists")
 	}
 	c.Collectors[TAG] = collector
-	c.mutex.Unlock()
 	return nil
 }
 
 func (c *Controller) RemoveCollector(TAG string) {
-	c.mutex.Lock()
+	c.Lock()
 	c.Collectors[TAG] = nil
-	c.mutex.Unlock()
+	c.Unlock()
 }
 
 func (controller *Controller) start(watcherChannel chan int, closeChannel chan bool) {
@@ -373,15 +363,40 @@ func receiveConnection(conn net.Conn, controller *Controller) {
 	connectCollector(&Collector{
 		LastCheckin: time.Now(),
 		Conn:        conn,
-		Stats: &CollectorStats{
-			// TODO, get from collector
-			AvalableBandwidth: 1250000000,
-			MaxAvail:          make(map[string]int64),
-		},
 	}, controller, message)
+}
+func findCollectorNamespaces(collector *Collector) (namespaces []string) {
+	var defaultNamespaces []string
+	for _, v := range GlobalBrain.Collecting.Default {
+		if strings.Contains(collector.TAG, v.Tag) || v.Tag == "*" {
+			defaultNamespaces = append(defaultNamespaces, v.Namespaces...)
+		}
+	}
+	var customNamespaces []string
+	for _, v := range GlobalBrain.Collecting.Custom {
+		if strings.Contains(collector.TAG, v.Tag) {
+			customNamespaces = append(customNamespaces, v.Namespaces...)
+		}
+	}
+
+	if len(customNamespaces) > 0 {
+		log.Println("USING CUSTOM INDEXES:", customNamespaces)
+		namespaces = customNamespaces
+	} else {
+		log.Println("USING DEFAULT INDEXES:", defaultNamespaces)
+		namespaces = defaultNamespaces
+	}
+	return
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	collector.TAG = strings.TrimSuffix(message, "\n")
+	ns := findCollectorNamespaces(collector)
+	collector.Namespaces = namespaces.MakeMapFromNamespaces(ns)
+
+	defer func() {
+		helpers.DebugLog("Closing read pipe from", collector.TAG)
+		controller.RemoveCollector(collector.TAG)
+	}()
 
 	helpers.DebugLog("COLLECTOR:", collector.TAG)
 	err := controller.AddCollector(collector.TAG, collector)
@@ -390,18 +405,13 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		_ = collector.Conn.Close()
 		return
 	}
-	defer func() {
-		helpers.DebugLog("Closing read pipe from", collector.TAG)
-		controller.RemoveCollector(collector.TAG)
-	}()
 
-	// msg, _ := bufio.NewReader(collector.Conn).ReadString('\n')
-	// if !strings.Contains(string(msg), "H||") {
-	// 	helpers.PanicX(errors.New("no host data found in handshake" + string(msg)))
-	// }
-	// helpers.DebugLog("HOST DATA:", string(msg))
-
-	_, err = collector.Conn.Write([]byte("k\n"))
+	jsonIndexes, err := json.Marshal(ns)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("SENDING INDEXES:", string(jsonIndexes))
+	_, err = collector.Conn.Write([]byte(string(jsonIndexes) + "\n"))
 	if err != nil {
 		helpers.DebugLog("could not establish coms with collector", err)
 		controller.RemoveCollector(collector.TAG)
@@ -423,7 +433,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 			return
 		}
 		length := binary.LittleEndian.Uint16(controlBytes[0:2])
-		log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
+		// log.Println("DATA LENGTH BYTES:", controlBytes[0:2], "length:", length)
 		data := make([]byte, length+8)
 		_, err = reader.Read(data)
 		if err != nil {
@@ -432,7 +442,7 @@ func readFromConnectionOriginal(collector *Collector, controller *Controller) {
 			return
 		}
 
-		go controller.HandleDataPoint(collector.TAG, data, int(controlBytes[2]))
+		go controller.HandleDataPoint(collector, data, int(controlBytes[2]))
 
 	}
 
@@ -445,20 +455,33 @@ type DataPoint struct {
 	ControlByte int
 }
 
-func (c *Controller) HandleDataPoint(tag string, data []byte, controlByte int) {
+func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlByte int) {
+	defer func() {
+		// recover if we get a broken data point.
+		r := recover()
+		if r != nil {
+			log.Println("panic!", r, string(debug.Stack()))
+		}
+	}()
 	var DPC DPCollection
 	if controlByte == 4 {
 		// log.Println("TIME:", timestamp)
 		// log.Println("FULL DATA:", data)
 		// log.Println("TAG:", tag, " CONTROL BYTE:", controlByte)
-		DPC = ParseMinimumDataPoint(data[8:])
 		DPC.Timestamp = binary.LittleEndian.Uint64(data[:8])
-		DPC.Tag = tag
+		DPC.Tag = collector.TAG
 		DPC.ControlByte = controlByte
+		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
+
+		log.Println()
+		for _, v := range DPC.DPS {
+			fmt.Print(v.Index, "/", v.Value, "  - ")
+		}
+
 		// log.Println(DPC)
 	}
 
-	c.UI.HistoryChannel <- DPC
+	c.UIParseChannel <- DPC
 }
 
 func (c *Controller) saveData(tag string, data []byte, controlByte int) {

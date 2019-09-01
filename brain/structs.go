@@ -1,10 +1,14 @@
-package main
+package brain
 
-import "net"
+import (
+	"net"
+
+	"github.com/zkynetio/lynx/alerting"
+)
 
 type Brain struct {
-	Config      Config
-	Alerting    []Alerting                `json:"alerting"`
+	Config      Config                    `json:"-"`
+	Alerting    []alerting.Alerting       `json:"alerting"`
 	Collecting  Collecting                `json:"collecting"`
 	Controllers map[string]LiveController `json:"-"`
 }
@@ -15,36 +19,13 @@ type LiveController struct {
 
 type Collecting struct {
 	Default []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"default"`
 	Custom []struct {
-		Tag     string   `json:"tag"`
-		Indexes []string `json:"indexes"`
+		Tag        string   `json:"tag"`
+		Namespaces []string `json:"namespaces"`
 	} `json:"custom"`
-}
-type Alerting struct {
-	Name  string `json:"name"`
-	Slack struct {
-	} `json:"slack"`
-	Email struct {
-	} `json:"email"`
-	Irc struct {
-	} `json:"irc"`
-	Pagerduty struct {
-	} `json:"pagerduty"`
-	Sms struct {
-	} `json:"sms"`
-	DefaultType string `json:"default_type"`
-	Defaults    []struct {
-		Tag       string   `json:"tag"`
-		Namespace string   `json:"namespace"`
-		Value     int      `json:"value"`
-		Time      string   `json:"time"`
-		Count     int      `json:"count"`
-		Color     string   `json:"color"`
-		To        []string `json:"to"`
-	} `json:"defaults"`
 }
 
 type Config struct {
@@ -64,19 +45,19 @@ type Cluster struct {
 	Controllers []Controller
 }
 type Controller struct {
-	IP        string    `json:"ip"`
-	UI        UI        `json:"ui"`
-	Collector Collector `json:"collector"`
+	IP        string          `json:"ip"`
+	UI        UIConfig        `json:"ui"`
+	Collector CollectorConfig `json:"collector"`
 	Live      bool
 	Shutdown  bool `json:"shutdown"`
 	Debug     bool `json:"debug"`
 	Restart   bool `json:"restart"`
 }
-type Collector struct {
+type CollectorConfig struct {
 	IP   string `json:"ip"`
 	Port int    `json:"port"`
 }
-type UI struct {
+type UIConfig struct {
 	IP   string `json:"ip"`
 	Port int    `json:"port"`
 }
