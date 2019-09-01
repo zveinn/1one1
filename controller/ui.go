@@ -32,7 +32,7 @@ func SaveToUIBuffer(parse chan DPCollection, send chan []byte) {
 				// log.Println("sending on the dp chan!")
 				send <- []byte(msg)
 			} else {
-				log.Println("HAS NOT CHANGED !!")
+				log.Println("No change in data ....")
 			}
 		}
 

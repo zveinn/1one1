@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"math/rand"
 	"net"
@@ -113,6 +112,7 @@ func (b *Brain) connectToBrain(address string) (config ControllerConfig) {
 		}
 		b.Socket = socket
 		b.SendChannel = make(chan []byte, 10000)
+
 		break
 	}
 
@@ -132,7 +132,28 @@ func Start(address string) {
 		Address: address,
 	}
 	GlobalBrain = &Brain
+	file, err := os.OpenFile("connectTo", os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		log.Println("could not create file (connectTo) in root directory...")
+		os.Exit(1)
+	}
+
+	reader := bufio.NewReader(file)
+	line, _, _ := reader.ReadLine()
+
+	if len(line) > 0 {
+		Brain.Address = string(line)
+		log.Println("Got the brains address from the connectTo file:", Brain.Address)
+	} else {
+		_, err = file.WriteAt([]byte(address), 0)
+		if err != nil {
+			log.Println("could not write connectTo flag to file (connectTo) in root directory")
+			os.Exit(1)
+		}
+	}
+	log.Println(address)
 	config := Brain.connectToBrain(address)
+
 	UIServer := ui.NewUIServer()
 	UIServer.ClientList = make(map[string]*ui.UI)
 
@@ -481,10 +502,11 @@ func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlB
 		DPC.ControlByte = controlByte
 		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
 
-		log.Println()
+		d := ""
 		for _, v := range DPC.DPS {
-			fmt.Print(v.Index, "/", v.Value, "  - ")
+			d = d + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "  - "
 		}
+		log.Println(d)
 
 	}
 

@@ -56,7 +56,7 @@ func (c *Collector) RemoveController(cont *Controller) {
 }
 func (c *Collector) CleanupOnExit() {
 	for _, controller := range c.Controllers {
-		helpers.DebugLog("Closing:", controller.Address)
+		log.Println("Closing:", controller.Address)
 		if controller.Conn != nil {
 			_ = controller.Conn.Close()
 		}
@@ -81,11 +81,11 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 			}
 			log.Println("maintaining controller:", controller)
 			if err := collector.dialAndHandshake(controller, collector.TAG); err != nil {
-				helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
+				log.Println("CONTROLLER COM. ERROR:", controller.Address)
 				continue
 			}
 
-			helpers.DebugLog("Engaging controller listener to", controller.Address)
+			log.Println("Engaging controller listener to", controller.Address)
 			go controller.OpenSendChannel()
 			controller.ChangeActiveStatus(true)
 		}
@@ -94,13 +94,28 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 }
 
 func (c *Controller) StartListening() {
-	// buf := make([]byte, 20000)
-	// for {
-	// 	n,err := c.Conn.Read(buf)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// }
+	for {
+		controlBytes := make([]byte, 3)
+		_, err := c.Conn.Read(controlBytes)
+		if err != nil {
+			return
+		}
+		data := make([]byte, binary.LittleEndian.Uint16(controlBytes[:2]))
+		_, err = c.Conn.Read(data)
+		if err != nil {
+			return
+		}
+
+		if controlBytes[2] == 0 {
+			log.Println("Controller send an error", err)
+			continue
+		}
+		if controlBytes[2] == 1 {
+			// address change..
+
+		}
+
+	}
 }
 func (collector *Collector) CollectStats(watcherChannel chan int) {
 	defer func(watcherChannel chan int) {
@@ -113,7 +128,7 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	startTime := time.Now()
 	for {
 		var data []byte
-		if !time.Now().After(startTime.Add(1000 * time.Millisecond)) {
+		if !time.Now().After(startTime.Add(100 * time.Millisecond)) {
 			time.Sleep(20 * time.Millisecond)
 			continue
 		}
@@ -159,7 +174,7 @@ func (c *Controller) OpenSendChannel() {
 		if r := recover(); r != nil {
 			log.Println("recovered inside OpenSendChannel()")
 		}
-		helpers.DebugLog("Closing send loop to controller", c.Address)
+		log.Println("Closing send loop to controller", c.Address)
 		c.ChangeActiveStatus(false)
 		close(c.SendChannel)
 	}()
@@ -187,7 +202,7 @@ func (c *Controller) OpenSendChannel() {
 		n, err := newbuffer.WriteTo(c.Conn)
 		newbuffer.Reset()
 		if err != nil {
-			helpers.DebugLog("ERROR WHEN WRITING STATS (Count", n, ") err:", err)
+			log.Println("ERROR WHEN WRITING STATS (Count", n, ") err:", err)
 			break
 		}
 	}
@@ -239,11 +254,11 @@ func (c *Collector) dialAndHandshake(controller *Controller, tag string) (err er
 func ConnectToControllers(address string, tag string, collector *Collector) {
 	controller := &Controller{Address: address, Active: false}
 	collector.AddController(controller)
-	helpers.DebugLog("Connecting to:", controller)
+	log.Println("Connecting to:", controller)
 	if err := collector.dialAndHandshake(controller, tag); err != nil {
-		helpers.DebugLog("CONTROLLER COM. ERROR:", controller.Address)
+		log.Println("CONTROLLER COM. ERROR:", controller.Address)
 		return
 	}
-	helpers.DebugLog("Connected to:", controller.Address)
+	log.Println("Connected to:", controller.Address)
 	go controller.OpenSendChannel()
 }

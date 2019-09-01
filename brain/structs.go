@@ -9,10 +9,10 @@ import (
 
 type Brain struct {
 	safelocker.SafeLocker
-	Config      Config                    `json:"-"`
-	Alerting    []alerting.Alerting       `json:"alerting"`
-	Collecting  Collecting                `json:"collecting"`
-	Controllers map[string]LiveController `json:"-"`
+	Config      Config                     `json:"-"`
+	Alerting    []alerting.Alerting        `json:"alerting"`
+	Collecting  Collecting                 `json:"collecting"`
+	Controllers map[string]*LiveController `json:"-"`
 }
 type LiveController struct {
 	Socket net.Conn    `json:"-"`

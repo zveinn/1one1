@@ -7,7 +7,6 @@ import (
 
 	"github.com/zkynetio/lynx/collector/processor"
 	"github.com/zkynetio/lynx/collector/stats"
-	"github.com/zkynetio/lynx/helpers"
 	"github.com/zkynetio/lynx/namespaces"
 )
 
@@ -35,8 +34,8 @@ func Start(tag string, address string) {
 	go collector.CollectStats(watcherChannel)
 
 	if os.Getenv("DEBUG") == "true" {
-		helpers.DebugLog(collector)
-		helpers.DebugLog("Collector running...")
+		log.Println(collector)
+		log.Println("Collector running...")
 	}
 
 	stop := make(chan os.Signal, 1)
