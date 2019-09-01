@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
@@ -74,6 +77,7 @@ func Start() {
 	for {
 		select {
 		case index := <-watcherChannel:
+			time.Sleep(1 * time.Second)
 			if index == 1 {
 				go Brain.ListenForControllers(watcherChannel)
 			}
@@ -91,52 +95,43 @@ func (b *Brain) ListenForControllers(watcher chan int) {
 	b.Controllers = make(map[string]LiveController)
 	defer func(watcher chan int) {
 		if r := recover(); r != nil {
-			log.Println("Receiver crashed", r)
+			log.Println("Receiver crashed", r, string(debug.Stack()))
 		}
 		watcher <- 1
 	}(watcher)
 
-	helpers.DebugLog("listening on:", b.Config.IP+":"+strconv.Itoa(b.Config.Port))
+	log.Println("listening on:", b.Config.IP+":"+strconv.Itoa(b.Config.Port))
 	ln, err := net.Listen("tcp", b.Config.IP+":"+strconv.Itoa(b.Config.Port))
 	helpers.PanicX(err)
 	for {
-		conn, err := ln.Accept()
+		socket, err := ln.Accept()
 		helpers.PanicX(err)
-		go b.acceptController(conn)
+		LC := LiveController{
+			Socket: socket,
+		}
+		err = b.AssignControllerToIPAndPort(&LC)
+		log.Println("Assignment error:", err)
+		if err != nil {
+			errLength := len(err.Error())
+			data := new(bytes.Buffer)
+			binary.Write(data, binary.LittleEndian, uint16(errLength))
+			data.Write([]byte{0x00})
+			data.Write([]byte(err.Error()))
+			data.WriteTo(socket)
+			socket.Close()
+			continue
+		}
+
+		go b.acceptController(LC)
 	}
 }
-func (b *Brain) acceptController(socket net.Conn) {
-	LC := LiveController{
-		Socket: socket,
-	}
-	b.AssignControllerToIPAndPort(&LC)
+func (b *Brain) acceptController(LC LiveController) {
 	log.Println("found config", LC.Config)
-
-	jsonConfig, err := json.Marshal(LC.Config)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println("Sending config;", string(jsonConfig))
-	data := new(bytes.Buffer)
-	binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
-	data.Write(jsonConfig)
-	data.WriteTo(socket)
-
-	jsonBrain, err := json.Marshal(b)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println("Sending brain;", string(jsonBrain))
-	data = new(bytes.Buffer)
-	binary.Write(data, binary.LittleEndian, uint16(len(jsonBrain)))
-	data.Write(jsonBrain)
-	data.WriteTo(socket)
-
-	LC.ListenToController(jsonConfig)
+	LC.SendConfigToController()
+	LC.SendBrainToController(b)
+	LC.ListenToController()
 }
-func (c *LiveController) ListenToController(con []byte) {
+func (LC *LiveController) SendConfigToController() {
 
 	// go func() {
 	// 	for {
@@ -151,6 +146,37 @@ func (c *LiveController) ListenToController(con []byte) {
 	// 		}
 	// 	}
 	// }()
+
+	jsonConfig, err := json.Marshal(LC.Config)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println("Sending config;", string(jsonConfig))
+	data := new(bytes.Buffer)
+	binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
+	data.Write([]byte{0x01})
+	data.Write(jsonConfig)
+	// log.Println("config bytes:", data.Bytes())
+	data.WriteTo(LC.Socket)
+}
+func (LC *LiveController) SendBrainToController(b *Brain) {
+	jsonBrain, err := json.Marshal(b)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println("Sending brain;", string(jsonBrain))
+	data := new(bytes.Buffer)
+	binary.Write(data, binary.LittleEndian, uint16(len(jsonBrain)))
+	data.Write([]byte{0x02})
+	data.Write(jsonBrain)
+	data.WriteTo(LC.Socket)
+
+}
+
+func (c *LiveController) ListenToController() {
+
 	buf := make([]byte, 20000)
 	for {
 		n, err := c.Socket.Read(buf)
@@ -162,14 +188,25 @@ func (c *LiveController) ListenToController(con []byte) {
 	}
 }
 
-func (b *Brain) AssignControllerToIPAndPort(c *LiveController) {
+func (b *Brain) AssignControllerToIPAndPort(c *LiveController) error {
 	cIP := strings.Split(c.Socket.RemoteAddr().String(), ":")[0]
-	for _, v := range b.Config.Clusters {
-		for _, iv := range v.Controllers {
+	err := errors.New("could not find a config for IP:" + cIP)
+	for i, v := range b.Config.Clusters {
+		for ii, iv := range v.Controllers {
+			log.Println("Controller:", iv.IP, iv.Live, iv.Collector.Port)
 			if iv.IP == cIP {
-				iv.Live = true
-				c.Config = &iv
+				err = errors.New("all controlles assigned to that IP address are already live")
+				if !iv.Live {
+					err = nil
+					b.Lock()
+					b.Config.Clusters[i].Controllers[ii].Live = true
+					b.Unlock()
+					c.Config = &iv
+					break
+				}
 			}
 		}
 	}
+
+	return err
 }

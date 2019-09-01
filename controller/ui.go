@@ -42,10 +42,12 @@ func SaveToUIBuffer(parse chan DPCollection, send chan []byte) {
 
 func ShipToUIS(send chan []byte) {
 	for {
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		dpcLength := len(send)
+		if dpcLength == 0 {
+			continue
+		}
 		var data []byte
-		// log.Println("PD chan length", dpcLength)
 		for i := 0; i < dpcLength; i++ {
 			msg := <-send
 			data = append(data, byte(44))

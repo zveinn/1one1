@@ -3,15 +3,9 @@ package helpers
 import (
 	"bytes"
 	"encoding/binary"
-	"log"
 	"strconv"
 )
 
-func DebugLog(v ...interface{}) {
-	// if os.Getenv("DEBUG") == "true" {
-	log.Println(v...)
-	// }
-}
 func PanicX(err error) {
 	if err != nil {
 		panic(err)

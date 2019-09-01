@@ -18,31 +18,26 @@ import (
 )
 
 type Collector struct {
-	Buffer             chan []byte
-	RecoveryFile       string
-	TAG                string
-	Controllers        map[string]*Controller
-	mutex              sync.Mutex
-	PointMap           map[int][]byte
-	LastBasePointIndex int
-	CurrentPointIndex  int
-	CurrentStaticIndex int
-	Namespaces         map[int]string
-
-	mux sync.Mutex
+	TAG         string
+	Controllers map[string]*Controller
+	mutex       sync.Mutex
+	Namespaces  map[int]string
+	mux         sync.Mutex
 }
-
-func (c *Collector) AddDataPoint(point []byte) (count int) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-	if len(c.PointMap) > 200000 {
-		c.PointMap = nil
-		c.PointMap = make(map[int][]byte)
-		c.CurrentPointIndex = 0
-	}
-	c.PointMap[c.CurrentPointIndex] = point
-	c.CurrentPointIndex++
-	return c.CurrentPointIndex
+type Controller struct {
+	Address     string
+	Active      bool
+	Conn        net.Conn
+	Retry       int
+	mutex       sync.Mutex
+	SendChannel chan DataPoint
+	//InactiveSince time.Time
+}
+type DataPoint struct {
+	Data        []byte
+	ControlByte byte
+	Timestamp   int64
+	Length      int
 }
 
 func (c *Collector) AddController(cont *Controller) {
@@ -66,38 +61,6 @@ func (c *Collector) CleanupOnExit() {
 			_ = controller.Conn.Close()
 		}
 	}
-}
-
-func sendBasePoint(collector *Collector, controller *Controller) {
-	var data []byte
-	if len(collector.PointMap) > 0 {
-		data = collector.PointMap[collector.LastBasePointIndex]
-	} else {
-		data = stats.CollectBasePoint()
-		_ = collector.AddDataPoint(data)
-	}
-	newbuffer := new(bytes.Buffer)
-	err := binary.Write(newbuffer, binary.LittleEndian, int16(len(data)))
-	if err != nil {
-		panic(err)
-	}
-	newbuffer.Write([]byte{101})
-	timestamp := time.Now().UnixNano()
-	err = binary.Write(newbuffer, binary.LittleEndian, int64(timestamp))
-	if err != nil {
-		panic(err)
-	}
-	// helpers.DebugLog("buffer len after timestamp", newbuffer.Len())
-	// helpers.DebugLog("last base index:", collector.LastBasePointIndex)
-	// helpers.DebugLog(collector.PointMap[collector.LastBasePointIndex])
-	newbuffer.Write(data)
-	// newbuffer = append(newbuffer, data)
-	// helpers.DebugLog("bytes from first base:", newbuffer.Bytes())
-	_, err = newbuffer.WriteTo(controller.Conn)
-	if err != nil {
-		panic(err)
-	}
-	newbuffer.Reset()
 }
 
 func (collector *Collector) MaintainControllerCommunications(watcherChannel chan int) {
@@ -130,6 +93,15 @@ func (collector *Collector) MaintainControllerCommunications(watcherChannel chan
 
 }
 
+func (c *Controller) StartListening() {
+	// buf := make([]byte, 20000)
+	// for {
+	// 	n,err := c.Conn.Read(buf)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+}
 func (collector *Collector) CollectStats(watcherChannel chan int) {
 	defer func(watcherChannel chan int) {
 		if r := recover(); r != nil {
@@ -138,8 +110,6 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		}
 		watcherChannel <- 1
 	}(watcherChannel)
-
-	// count := collector.CurrentPointIndex
 	startTime := time.Now()
 	for {
 		var data []byte
@@ -155,37 +125,8 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 					log.Println("panic while sending stats:", r, string(debug.Stack()))
 				}
 			}()
-			// time.Sleep(time.Duration(collector.CollectionInterval) * time.Millisecond)
-			var ControlByte byte
-			// if count%60 == 0 {
-			// 	staticData := stats.CheckStaticDataForChanges()
-			// 	if staticData != "" {
-			// 		log.Println("do something with static data !")
-			// 	}
-			// 	ControlByte = 1
-			// 	data = stats.CollectBasePoint()
-			// 	collector.LastBasePointIndex = count
-			// 	count = collector.AddDataPoint(data)
-			// } else {
 			data = stats.GetMinimumStats(collector.Namespaces)
-			// count = collector.AddDataPoint(data)
-			// control byte 4 means this is a minimal data point
-			ControlByte = 4
-			// }
-
-			// accumilatedBytes := 0
-			// pointCount := 0
-			// var allBytes []byte
-			// for _, v := range collector.PointMap {
-			// 	accumilatedBytes = accumilatedBytes + len(v)
-			// 	allBytes = append(allBytes, v...)
-			// 	pointCount++
-			// }
-			// var b bytes.Buffer
-			// w := zlib.NewWriter(&b)
-			// w.Write(allBytes)
-			// w.Close()
-			// helpers.DebugLog("Current DP size:", len(data), "Accumilated DP size:", accumilatedBytes, " Compressed:", b.Len(), "DP count:", pointCount)
+			ControlByte := byte(4)
 			for _, controller := range collector.Controllers {
 				if controller.Active {
 					controller.SendChannel <- DataPoint{
@@ -199,22 +140,6 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 		}()
 
 	}
-}
-
-type Controller struct {
-	Address     string
-	Active      bool
-	Conn        net.Conn
-	Retry       int
-	mutex       sync.Mutex
-	SendChannel chan DataPoint
-	//InactiveSince time.Time
-}
-type DataPoint struct {
-	Data        []byte
-	ControlByte byte
-	Timestamp   int64
-	Length      int
 }
 
 func (c *Controller) ChangeActiveStatus(status bool) {
@@ -279,10 +204,6 @@ func dialController(controller *Controller) (err error) {
 func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
-	// data := stats.GetStaticBasePoint()
-	// _, err = controller.Conn.Write([]byte(data + "\n"))
-	// helpers.PanicX(err)
-
 	var ns []string
 
 	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')

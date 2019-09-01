@@ -19,7 +19,6 @@ func Start(tag string, address string) {
 	}
 	defer collector.CleanupOnExit()
 	// the point map is only for debugging.
-	collector.PointMap = make(map[int][]byte)
 	collector.Controllers = make(map[string]*processor.Controller)
 	namespaces.Init()
 
@@ -34,15 +33,12 @@ func Start(tag string, address string) {
 	watcherChannel := make(chan int)
 	go collector.MaintainControllerCommunications(watcherChannel)
 	go collector.CollectStats(watcherChannel)
-	// todo
-	// go collector.SendStats()
 
 	if os.Getenv("DEBUG") == "true" {
 		helpers.DebugLog(collector)
 		helpers.DebugLog("Collector running...")
 	}
 
-	// capture stop signal in order to exit gracefully.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	for {
@@ -56,8 +52,9 @@ func Start(tag string, address string) {
 			log.Println("goroutine number", index, "just restarted...")
 			break
 		case <-stop:
-			// TODO: handle exit gracefully
 			log.Println("handle exit gracefully")
+			collector.CleanupOnExit()
+
 			os.Exit(1)
 		}
 	}
