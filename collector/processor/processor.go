@@ -128,7 +128,7 @@ func (collector *Collector) CollectStats(watcherChannel chan int) {
 	startTime := time.Now()
 	for {
 		var data []byte
-		if !time.Now().After(startTime.Add(100 * time.Millisecond)) {
+		if !time.Now().After(startTime.Add(1000 * time.Millisecond)) {
 			time.Sleep(20 * time.Millisecond)
 			continue
 		}

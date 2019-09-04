@@ -1,6 +1,10 @@
 package alerting
 
-import "github.com/zkynetio/safelocker"
+import (
+	"log"
+
+	"github.com/zkynetio/safelocker"
+)
 
 type Alerting struct {
 	Name  string `json:"name"`
@@ -50,4 +54,15 @@ func (a *AlertBucket) RemoveAlert(tag string) {
 	a.Lock()
 	defer a.Unlock()
 	delete(a.ActiveAlert, tag)
+}
+func Irc() {
+
+	log.Println("meow... alert sent! to irc")
+}
+func Slack() {
+	log.Println("meow... alert sent to slack!")
+}
+
+func Email() {
+	log.Println("meow... alert sent to email!")
 }

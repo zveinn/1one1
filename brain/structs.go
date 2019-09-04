@@ -36,14 +36,16 @@ type Config struct {
 	} `json:"ui"`
 	Clusters        []Cluster
 	AlertingConfigs []string
+	Alerting        bool
 }
 type Cluster struct {
 	Tag         string `json:"tag"`
 	Controllers []Controller
 }
 type Controller struct {
-	IP        string          `json:"ip"`
 	UI        UIConfig        `json:"ui"`
+	IP        string          `json:"ip"`
+	Tag       string          `json:"tag"`
 	Collector CollectorConfig `json:"collector"`
 	Live      bool            `json:"-"`
 	Shutdown  bool            `json:"shutdown"`

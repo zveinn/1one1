@@ -16,8 +16,9 @@ var Server *UIServer
 type UIServer struct {
 	ClientList map[string]*UI
 	safelocker.SafeLocker
-	IP   string
-	Port string
+	IP         string
+	Port       string
+	HasClients bool
 }
 type UI struct {
 	Conn   *websocket.Conn
@@ -109,12 +110,15 @@ func (uis *UIServer) AcceptConnection(conn *websocket.Conn) {
 func (uis *UIServer) AddUI(TAG string, client *UI) {
 	uis.Lock()
 	uis.ClientList[TAG] = client
+	uis.HasClients = true
 	uis.Unlock()
 }
 
 func (uis *UIServer) RemoveUI(TAG string) {
 	uis.Lock()
-	// ui.ClientList[TAG] = nil
 	delete(uis.ClientList, TAG)
+	if len(uis.ClientList) == 0 {
+		uis.HasClients = false
+	}
 	uis.Unlock()
 }

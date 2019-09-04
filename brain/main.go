@@ -22,7 +22,7 @@ import (
 
 var GlobalBrain *Brain
 
-func ReadCollectionConfig(b *Brain) {
+func ReadCollectionConfigi(b *Brain) {
 	file, err := ioutil.ReadFile("collecting.json")
 	if err != nil {
 		panic(err)
@@ -31,37 +31,70 @@ func ReadCollectionConfig(b *Brain) {
 	_ = json.Unmarshal([]byte(file), &data)
 	b.Collecting = data
 }
-func ReadBrainConfig(b *Brain) {
+func ReadConfigs(b *Brain) {
 	for {
 		time.Sleep(5 * time.Second)
-		ReadBrainConfigAtStart(b)
+		oldBrain := *b
+		// log.Println(b)
+		ReadBrainConfig(b)
+		ReadCollectionConfigi(b)
+		ReadAlertingConfig(b)
+
+		// TODO send configs !
+
+		// log.Println("config has changed !!")
+		hasChanged := false
+		if !cmp.Equal(b.Config.AlertingConfigs, oldBrain.Config.AlertingConfigs) {
+			log.Println("alerting has changed")
+			hasChanged = true
+		}
+		if !cmp.Equal(b.Collecting, oldBrain.Collecting) {
+			log.Println("cllecting has changed")
+			hasChanged = true
+		}
+
+		// we only need to check for removed clust
+		for _, cluster1 := range oldBrain.Config.Clusters {
+			for _, cluster2 := range b.Config.Clusters {
+				if cluster2.Tag == cluster1.Tag {
+					for _, _ = range cluster2.Controllers {
+
+						// log.Println("CP:", &c1)
+						for _, _ = range b.Controllers {
+							// FIND POINTERS AND COMPARE
+
+							// log.Println(*&v)
+						}
+
+					}
+					if !cmp.Equal(cluster1, cluster2) {
+						hasChanged = true
+					}
+				}
+			}
+		}
+
+		if hasChanged {
+			for _, v := range b.Controllers {
+				b.SendBrainToController(v)
+			}
+		} else {
+			log.Println("no config change !")
+		}
+
+		if oldBrain.Config.IP != b.Config.IP || oldBrain.Config.Port != b.Config.Port {
+			b.SendNewAddressToControllers(b.Config.IP + ":" + strconv.Itoa(b.Config.Port))
+		}
 	}
 }
-func ReadBrainConfigAtStart(b *Brain) {
+func ReadBrainConfig(b *Brain) {
 	file, err := ioutil.ReadFile("brain.json")
 	if err != nil {
 		panic(err)
 	}
 	data := Config{}
 	_ = json.Unmarshal([]byte(file), &data)
-	configSent := false
-	oldData := b.Config
 	b.Config = data
-	if !cmp.Equal(b.Config.AlertingConfigs, oldData.AlertingConfigs) {
-		log.Println("config has changed !!")
-		for _, v := range b.Controllers {
-			b.SendBrainToController(v)
-		}
-		configSent = true
-	}
-
-	if !configSent {
-		// find a way to check controllers for change !
-	}
-
-	if data.IP != data.IP || data.Port != data.Port {
-		b.SendNewAddressToControllers(data.IP + ":" + strconv.Itoa(data.Port))
-	}
 
 }
 func ReadAlertingConfig(b *Brain) {
@@ -88,11 +121,12 @@ func ReadAlertingConfig(b *Brain) {
 func Start() {
 
 	Brain := Brain{}
-	ReadBrainConfigAtStart(&Brain)
-	go ReadBrainConfig(&Brain)
+	ReadBrainConfig(&Brain)
 	ReadAlertingConfig(&Brain)
-	ReadCollectionConfig(&Brain)
+	ReadCollectionConfigi(&Brain)
 	GlobalBrain = &Brain
+
+	go ReadConfigs(&Brain)
 
 	log.Println(Brain.Config)
 	log.Println(Brain.Alerting)
@@ -122,7 +156,7 @@ func Start() {
 }
 func (b *Brain) AddController(LC *LiveController) {
 	b.Lock()
-	b.Controllers[LC.Socket.RemoteAddr().String()] = LC
+	b.Controllers[strings.Split(LC.Socket.RemoteAddr().String(), ":")[0]+":"+strconv.Itoa(LC.Config.Collector.Port)] = LC
 	defer b.Unlock()
 }
 func (b *Brain) RemoveController(address string) {

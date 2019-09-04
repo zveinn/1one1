@@ -29,14 +29,18 @@ type Controller struct {
 	safelocker.SafeLocker
 	// Recovery in sqlite?
 	//RecoveryFile string
-	Config         ControllerConfig
-	PORT           string
-	IP             string
-	Collectors     map[string]*Collector
-	UIs            map[string]*ui.UI
+	Config     ControllerConfig
+	PORT       string
+	IP         string
+	Collectors map[string]*Collector
+
+	// UI
 	UIServer       *ui.UIServer
 	UIParseChannel chan DPCollection
 	UISendChannel  chan []byte
+
+	// alerting
+	AlertingChannel chan DPCollection
 }
 type Collector struct {
 	TAG         string
@@ -78,8 +82,14 @@ type ControllerConfig struct {
 	}
 }
 
-func (b *Brain) connectToBrain(address string) (config ControllerConfig) {
+func (b *Brain) connectToBrain(address string, stop chan os.Signal) (config ControllerConfig) {
 	for {
+		select {
+		case signal := <-stop:
+			log.Println("Caught OS signal (", signal, ") closing..")
+			os.Exit(1)
+		default:
+		}
 		time.Sleep(1 * time.Second)
 		var socket net.Conn
 		socket, err := net.Dial("tcp", b.Address)
@@ -126,6 +136,8 @@ func (b *Brain) connectToBrain(address string) (config ControllerConfig) {
 	return
 }
 func Start(address string) {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
 	rand.Seed(time.Now().Unix())
 	namespaces.Init()
 	Brain := Brain{
@@ -152,7 +164,7 @@ func Start(address string) {
 		}
 	}
 	log.Println(address)
-	config := Brain.connectToBrain(address)
+	config := Brain.connectToBrain(address, stop)
 
 	UIServer := ui.NewUIServer()
 	UIServer.ClientList = make(map[string]*ui.UI)
@@ -170,7 +182,7 @@ func Start(address string) {
 		Collectors: make(map[string]*Collector),
 		UIServer:   UIServer,
 	}
-	// os.Exit(1)
+	defer controller.CleanupOnExit()
 	watcherChannel := make(chan int, 10)
 	closeChannel := make(chan bool, 10)
 	go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
@@ -181,12 +193,9 @@ func Start(address string) {
 
 	GlobalController = &controller
 
-	defer controller.CleanupOnExit()
 	go UIServer.Start(watcherChannel)
 	go controller.start(watcherChannel, closeChannel)
-	stop := make(chan os.Signal, 1)
 
-	signal.Notify(stop, os.Interrupt)
 	for {
 		select {
 		case index := <-watcherChannel:
@@ -196,7 +205,7 @@ func Start(address string) {
 			} else if index == 2 {
 				go controller.start(watcherChannel, closeChannel)
 			} else if index == 3 {
-				GlobalController.Config = Brain.connectToBrain(address)
+				GlobalController.Config = Brain.connectToBrain(address, stop)
 				go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
 			}
 
@@ -205,8 +214,7 @@ func Start(address string) {
 		case signal := <-stop:
 			log.Println("Signal received (", signal, ") controller will now exit gracefully")
 			controller.CleanupOnExit()
-
-			os.Exit(1)
+			return
 		}
 	}
 
@@ -502,7 +510,7 @@ func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlB
 		DPC.ControlByte = controlByte
 		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
 
-		d := ""
+		var d string
 		for _, v := range DPC.DPS {
 			d = d + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "  - "
 		}
@@ -510,5 +518,8 @@ func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlB
 
 	}
 
-	c.UIParseChannel <- DPC
+	if c.UIServer.HasClients {
+		c.UIParseChannel <- DPC
+	}
+
 }
