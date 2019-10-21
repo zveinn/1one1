@@ -6,7 +6,6 @@ import (
 
 var History *HistoryBuffer
 
-
 type MinimumStats struct {
 	CPUUsage    int8
 	DiskUsage   int8

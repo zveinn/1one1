@@ -9,7 +9,6 @@
 ### ALL DISKS!
 ## refactoring
 
-### add logger !!
 
 
 ## controller data queries.. 
@@ -82,3 +81,78 @@ TODO:
 4. add stats that are needed for new protocols. 
 5. Implenent proper logging and error handling.
 6. ....
+
+
+
+
+
+
+# NEW NOTES FOR FINAL SPRINT
+
+# UP TO DATE FLOW
+1. Start the brain
+1.1 read configs
+1.2 listen for controllers
+2. start controller
+2.1 controller looks for brain address in file or save to file.
+2.2 connect to brain
+ (from brain)0x0 = error, 0x1 = succcess, 0x2= brain config, 0x3= new address
+2.3 receive configs
+2.4 start go routines
+3. start collector
+3.1 connect to controller
+3.1.1 send tag
+3.1.2 receive namespaces
+3.1.2 change active status
+
+3.2 receive configs
+3.3 collect stats and send to controller
+
+
+# UI 
+1. connect to brain
+1.1 get controller list
+1.2 connect to controllers
+1.3 get collector list
+1.4 start receiving stats
+
+# UI NOTES
+1. Grouping has to happen in the front-end
+2. Can we somehow achive a similar layout with only css and html? that would be epic. 
+     - maybe we can have a front and side view at the same time??
+3. NETWORKING:
+     - can we somehow determine link strength?
+     - UI display: nuber on cube: 10.00 = GB .. 120mb = 0.12 ( above 1GB we ignore second decimals)
+     - UI display: draw a line up and down for the network ? ... 
+4. Possible alert types:
+     - line from the left, top, right, bottom.. that goes outside the box
+     - crosshairs
+     - border highlight
+     - luminocity(kind of like its heating...)
+     - make a second bottom box under the current bottom layer that has sections indicating ??
+          -
+5. possible different display modes
+      - reflected cube
+      - thermometer next to cube showing network
+      - thermometer only for all indexes ??
+      - thermometer with segmented buttom for tag grouping... ?
+      - cutom thermometer
+      - sphere ?!
+      - floor plan + items...
+
+# stats index
+1 = cpu used
+2 = disk used / ( should I do all disks ... or maybe add a nr6+ where you can pick additional drivers? )
+3 = memory used
+4 = network in bytes per second
+5 = network out bytes per second
+
+
+
+# DATA ON DISK
+1. rsyslog option on controller or maybe even collectors???.. that would be sick.
+2. zip bulks on disk? or will that slo us down too much??
+3. make it optional to save history.. options (off, disk, rsyslog, sql?, redis?..)
+
+format:
+ns(seperated by dots..)/year/month/day/hour/minute/datapoint

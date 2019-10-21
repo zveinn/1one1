@@ -7,7 +7,9 @@
     <title>Document</title>
 </head>
 <body>
-    
+   
+  <div id="print"></div>
+
 </body>
 <script>
     let socket = new WebSocket("ws:127.0.0.1:6671");
@@ -30,8 +32,9 @@ socket.onopen = function(e) {
 
 socket.onmessage = function(event) {
   console.log(`[message] Data received: ${event.data} <- server`);
-  var dpc = JSON.parse(event.data)
-  console.log(dpc)
+  // var dpc = JSON.parse(event.data)
+  console.dir(event.data)
+   document.getElementById("print").innerHTML += "<div>"+event.data+"</div>"
 };
 
 socket.onclose = function(event) {

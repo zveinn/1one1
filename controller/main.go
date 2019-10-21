@@ -504,12 +504,12 @@ func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlB
 	if controlByte == 4 {
 		// log.Println("TIME:", timestamp)
 		// log.Println("FULL DATA:", data)
-		// log.Println("TAG:", tag, " CONTROL BYTE:", controlByte)
-		DPC.Timestamp = binary.LittleEndian.Uint64(data[:8])
+		log.Println("TAG:", collector.TAG, " CONTROL BYTE:", controlByte)
+
+		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
+		// DPC.Timestamp = binary.LittleEndian.Uint64(data[:8])
 		DPC.Tag = collector.TAG
 		DPC.ControlByte = controlByte
-		DPC = ParseMinimumDataPoint(data[8:], collector.Namespaces)
-
 		var d string
 		for _, v := range DPC.DPS {
 			d = d + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "  - "
@@ -519,6 +519,7 @@ func (c *Controller) HandleDataPoint(collector *Collector, data []byte, controlB
 	}
 
 	if c.UIServer.HasClients {
+		log.Println("sending to ui:", DPC)
 		c.UIParseChannel <- DPC
 	}
 

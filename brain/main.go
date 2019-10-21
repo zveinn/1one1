@@ -22,7 +22,7 @@ import (
 
 var GlobalBrain *Brain
 
-func ReadCollectionConfigi(b *Brain) {
+func ReadCollectionConfig(b *Brain) {
 	file, err := ioutil.ReadFile("collecting.json")
 	if err != nil {
 		panic(err)
@@ -37,7 +37,7 @@ func ReadConfigs(b *Brain) {
 		oldBrain := *b
 		// log.Println(b)
 		ReadBrainConfig(b)
-		ReadCollectionConfigi(b)
+		ReadCollectionConfig(b)
 		ReadAlertingConfig(b)
 
 		// TODO send configs !
@@ -123,7 +123,7 @@ func Start() {
 	Brain := Brain{}
 	ReadBrainConfig(&Brain)
 	ReadAlertingConfig(&Brain)
-	ReadCollectionConfigi(&Brain)
+	ReadCollectionConfig(&Brain)
 	GlobalBrain = &Brain
 
 	go ReadConfigs(&Brain)
