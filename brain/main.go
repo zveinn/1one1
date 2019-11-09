@@ -57,19 +57,37 @@ func ReadConfigs(b *Brain) {
 		for _, cluster1 := range oldBrain.Config.Clusters {
 			for _, cluster2 := range b.Config.Clusters {
 				if cluster2.Tag == cluster1.Tag {
-					for _, _ = range cluster2.Controllers {
-
-						// log.Println("CP:", &c1)
-						for _, _ = range b.Controllers {
-							// FIND POINTERS AND COMPARE
-
-							// log.Println(*&v)
+					for _, cont1 := range cluster2.Controllers {
+						for _, cont2 := range b.Controllers {
+							if cont2.Config.Tag == cont1.Tag {
+								if cont2.Config.IP != cont1.IP {
+									hasChanged = true
+								}
+								if cont2.Config.Restart != cont1.Restart {
+									hasChanged = true
+								}
+								if cont2.Config.Shutdown != cont1.Shutdown {
+									hasChanged = true
+								}
+								if cont2.Config.Debug != cont1.Debug {
+									hasChanged = true
+								}
+								if cont2.Config.Collector.IP != cont1.Collector.IP {
+									hasChanged = true
+								}
+								if cont2.Config.Collector.Port != cont1.Collector.Port {
+									hasChanged = true
+								}
+								if cont2.Config.UI.IP != cont1.UI.IP {
+									hasChanged = true
+								}
+								if cont2.Config.UI.Port != cont1.UI.Port {
+									hasChanged = true
+								}
+							}
 						}
+					}
 
-					}
-					if !cmp.Equal(cluster1, cluster2) {
-						hasChanged = true
-					}
 				}
 			}
 		}
