@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/binary"
+	"log"
 )
 
 type DP struct {
@@ -16,15 +17,15 @@ type DPCollection struct {
 }
 
 func ParseMinimumDataPoint(data []byte, namespaces map[int]string) DPCollection {
-	// log.Println("FULL DATA", data)
-	// cpu := int8(data[0])
-	// disk := int8(data[1])
-	// memory := int8(data[2])
+	log.Println("FULL DATA", data)
+	cpu := int8(data[0])
+	disk := int8(data[1])
+	memory := int8(data[2])
 	// networkIN := binary.LittleEndian.Uint64(data[3:11])
 	// networkOUT := binary.LittleEndian.Uint64(data[11:19])
-	// log.Println("CPU:", cpu)
-	// log.Println("DISK:", disk)
-	// log.Println("MEMORY:", memory)
+	log.Println("CPU:", cpu)
+	log.Println("DISK:", disk)
+	log.Println("MEMORY:", memory)
 	// log.Println("NETWORK IN:", networkIN)
 	// log.Println("NETWORK OUT:", networkOUT)
 

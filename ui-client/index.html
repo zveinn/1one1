@@ -14,7 +14,7 @@
 <script>
     let socket = new WebSocket("ws:127.0.0.1:6671");
     // datapoint = {index:number, value:number}
-var datapoints = []
+    var nodes ={}
 var config = {
   X: {"normalize":true, "index":1},
   Y: {"normalize":true, "index":2},
@@ -33,9 +33,59 @@ socket.onopen = function(e) {
 socket.onmessage = function(event) {
   console.log(`[message] Data received: ${event.data} <- server`);
   // var dpc = JSON.parse(event.data)
-  console.dir(event.data)
-   document.getElementById("print").innerHTML += "<div>"+event.data+"</div>"
+  // console.dir(event.data)
+  dataCollections = event.data.split(",")
+  dataCollections.forEach(element => {
+   let columns =  element.split("/")
+    nodes[columns[0]] = {tag:columns[0],cpu:columns[1], disk:columns[2], memory:columns[3], netin:columns[4], netout:columns[5]}
+    // console.log("Node:", columns[0], "cpu: ", columns[1], " disk: ", columns[2], " memory: ", columns[3],  " networkIN: ", columns[4], " networkOUT: ", columns[5])
+  });
+
+ 
+  // console.dir(nodes)
+  // // for(i=0;i<=99999;i++) {
+  // //   if (nodes[i] === undefined ){
+  // //   console.log("no node..")
+  // //     break
+  // //   }
+  // //   console.log("one node..")
+  // //   console.dir(nodes[i])
+  // // }
+  
+
+  
+  //  document.getElementById("print").innerHTML = ""
+  render()
 };
+
+function render(){
+
+console.dir(nodes)
+
+  Object.keys(nodes).forEach(key => {
+    var msg = ""
+    console.log("one node ...")
+       nodeDiv = document.getElementById(key)
+       console.dir(nodes[key])
+       console.dir(nodeDiv)
+  if (nodeDiv === null ) {
+    console.log("no node.. making a new one")
+    nodeDiv = document.createElement("div")
+    nodeDiv.id = key
+    print =  document.getElementById("print").appendChild(nodeDiv)
+  } else {
+    console.dir(nodes[key])
+    if (nodes[key].netin > 2000 || nodes[key].netout > 2000 ||  nodes[key].memory > 30 || nodes[key].disk > 80 || nodes[key].cpu > 10) {
+      
+             msg =  "!!!! >>>> [ "+nodes[key].tag+" ] cpu[ "+nodes[key].cpu+" ]"+" disk[ "+nodes[key].disk+" ] mem["+nodes[key].memory+"]"+" in[ "+nodes[key].netin+" ]/s out[ "+nodes[key].netout+" ]/s </br>"
+    } else {
+             msg =  "[ "+nodes[key].tag+" ] cpu[ "+nodes[key].cpu+" ]"+" disk[ "+nodes[key].disk+" ] mem["+nodes[key].memory+"]"+" in[ "+nodes[key].netin+" ]/s out[ "+nodes[key].netout+" ]/s</br>"
+    }
+  }
+  nodeDiv.innerHTML = msg
+  })
+
+}
 
 socket.onclose = function(event) {
   if (event.wasClean) {

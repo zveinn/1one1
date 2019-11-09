@@ -20,10 +20,14 @@ func SaveToUIBuffer(parse chan DPCollection, send chan []byte) {
 			for _, v := range dpc.DPS {
 				for _, iv := range olddpc.DPS {
 					if iv.Index == v.Index {
-						if iv.Value != v.Value {
-							hasChanged = true
-							msg = msg + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "/"
-						}
+						// if iv.Value != v.Value {
+						hasChanged = true
+						msg = msg + strconv.Itoa(v.Value) + "/"
+						// msg = msg + strconv.Itoa(v.Index) + "/" + strconv.Itoa(v.Value) + "/"
+						// }
+
+						// msg = msg + "X" + "/"
+						// }
 					}
 				}
 			}
@@ -43,22 +47,29 @@ func SaveToUIBuffer(parse chan DPCollection, send chan []byte) {
 func ShipToUIS(send chan []byte) {
 	for {
 		time.Sleep(500 * time.Millisecond)
-		dpcLength := len(send)
-		if dpcLength == 0 {
-			continue
-		}
+
 		var data []byte
-		for i := 0; i < dpcLength; i++ {
-			msg := <-send
-			data = append(data, msg...)
-			if i != 0 {
-				data = append(data, byte(44))
+		for i := 0; i < 10000; i++ {
+			select {
+			case msg := <-send:
+				if i != 0 && i != 10000 {
+					log.Println("appending byte 44", string(byte(44)))
+					data = append(data, byte(44))
+				}
+				data = append(data, msg...)
+				if i == 10000 {
+					break
+				}
+			default:
+				break
 			}
+
 		}
 
 		if len(data) < 1 {
 			continue
 		}
+
 		for _, v := range ui.Server.ClientList {
 			v.Conn.WriteMessage(1, data)
 		}

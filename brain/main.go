@@ -103,7 +103,7 @@ func ReadAlertingConfig(b *Brain) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	b.Alerting = nil
 	for _, f := range files {
 		if strings.Contains(f.Name(), "alerts") {
 			file, err := ioutil.ReadFile(f.Name())

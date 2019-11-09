@@ -1,7 +1,6 @@
 package stats
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/shirou/gopsutil/process"
@@ -16,7 +15,7 @@ func GetCPUByte() byte {
 	for _, v := range cpuStat {
 		ps, err := v.CPUPercent()
 		if err != nil {
-			log.Println("A process might disapear before we manage to stat it..")
+			// log.Println("A process might disapear before we manage to stat it..")
 			continue
 		}
 		// helpers.PanicX(err)
