@@ -10,6 +10,12 @@ var minZoomIn = 10;
 var minZoomOut = 80;
 var initialZoom = 60;
 
+var CUBEGeometry = new THREE.BoxBufferGeometry(0.2, 0.2, 0.2);
+var CUBEMaterial = new THREE.MeshBasicMaterial({
+  color: 0xff9900,
+  side: THREE.DoubleSide
+});
+
 init();
 animate();
 
@@ -22,8 +28,65 @@ function init() {
   renderCamera();
   createControls();
   addAxesHelper();
-  renderData();
+  // renderData();
   renderAxeLabel();
+
+  let socket = new WebSocket("ws:127.0.0.1:6671");
+  // datapoint = {index:number, value:number}
+  var nodes = {};
+  var config = {
+    X: { normalize: true, index: 1 },
+    Y: { normalize: true, index: 2 },
+    Z: { normalize: true, index: 3 },
+    Size: { normalize: true, index: 4 },
+    Luminocity: { normalize: true, index: 5 },
+    Blink: {},
+    UpdateRate: 1000,
+    WantsUpdates: true
+  };
+
+  socket.onopen = function(e) {
+    console.log("[open] Connection established, send -> server");
+    socket.send(JSON.stringify(config));
+  };
+
+  socket.onmessage = function(event) {
+    console.log(`[message] Data received: ${event.data} <- server`);
+    // var dpc = JSON.parse(event.data)
+    // console.dir(event.data)
+    let dataCollections = event.data.split(",");
+    dataCollections.forEach(element => {
+      let columns = element.split("/");
+      nodes[columns[0]] = {
+        tag: columns[0],
+        cpu: columns[1],
+        disk: columns[2],
+        memory: columns[3],
+        netin: columns[4],
+        netout: columns[5]
+      };
+      // console.log("Node:", columns[0], "cpu: ", columns[1], " disk: ", columns[2], " memory: ", columns[3],  " networkIN: ", columns[4], " networkOUT: ", columns[5])
+    });
+    render();
+  };
+
+  let cubes = {};
+
+  function render() {
+    Object.keys(nodes).forEach(key => {
+      if (cubes[nodes[key].tag] === undefined) {
+        cubes[nodes[key].tag] = new THREE.Mesh(CUBEGeometry, CUBEMaterial);
+
+        console.log("MAKING A NEW CUBE ...", cubes[nodes[key].tag]);
+        scene.add(cubes[nodes[key].tag]);
+      }
+      cubes[nodes[key].tag].position.set(
+        nodes[key].disk / 10,
+        nodes[key].cpu / 10,
+        nodes[key].memory / 10
+      );
+    });
+  }
 
   // EVENT LISTENERS
   document.addEventListener("mousemove", onDocumentMouseMove, false);
@@ -110,12 +173,7 @@ function renderAxeLabel() {
  */
 function renderData() {
   data.slice(1, 200).map(point => {
-    var geometry = new THREE.BoxBufferGeometry(0.2, 0.2, 0.2);
-    var material = new THREE.MeshBasicMaterial({
-      color: 0xff9900,
-      side: THREE.DoubleSide
-    });
-    var cube = new THREE.Mesh(geometry, material);
+    var cube = new THREE.Mesh(CUBEGeometry, CUBEMaterial);
     cube.position.set(
       point.position.x / 10,
       point.position.y / 10,
