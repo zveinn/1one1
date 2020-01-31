@@ -43865,17 +43865,76 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 //Mock data import
 var camera, scene, renderer, raycaster, controls, mouse, INTERSECTED, axes;
-var AXESLENGTH = 14;
-var minZoomIn = 10;
+var AXESLENGTH = 1;
+var minZoomIn = 1;
 var minZoomOut = 80;
 var initialZoom = 60;
-var CUBEGeometry = new THREE.BoxBufferGeometry(0.2, 0.2, 0.2);
+var CUBEGeometry = new THREE.BoxBufferGeometry(0.01, 0.01, 0.01);
 var CUBEMaterial = new THREE.MeshBasicMaterial({
   color: 0xff9900,
   side: THREE.DoubleSide
 });
+var socket = new WebSocket("ws:127.0.0.1:6671"); // datapoint = {index:number, value:number}
+
+var nodes = {};
+var config = {
+  X: {
+    normalize: true,
+    index: 2
+  },
+  Y: {
+    normalize: true,
+    index: 1
+  },
+  Z: {
+    normalize: true,
+    index: 3
+  },
+  Size: {
+    normalize: true,
+    index: 4
+  },
+  Luminocity: {
+    normalize: true,
+    index: 5
+  },
+  Blink: {} // UpdateRate: 1000,
+  // WantsUpdates: true
+
+};
 init();
 animate();
+
+function getID(id) {
+  return document.getElementById(id);
+}
+
+document.getElementById("update-settings").addEventListener("click", function () {
+  config.X = {
+    normalize: true,
+    index: getID("x-axis").innerHTML
+  };
+});
+document.getElementById("list-button").addEventListener("click", function (event) {
+  console.dir(event);
+  var target = document.getElementById("list");
+
+  if (target.className === "hide") {
+    target.className = "list";
+  } else {
+    target.className = "hide";
+  }
+});
+document.getElementById("settings-button").addEventListener("click", function (event) {
+  console.dir(event);
+  var target = document.getElementById("settings");
+
+  if (target.className === "hide") {
+    target.className = "settings";
+  } else {
+    target.className = "hide";
+  }
+});
 
 function init() {
   scene = new THREE.Scene();
@@ -43883,38 +43942,14 @@ function init() {
   mouse = new THREE.Vector2();
   startRenderer();
   renderCamera();
-  createControls();
-  addAxesHelper(); // renderData();
+  createControls(); // addAxesHelper();
+  // renderData();
+  // renderAxeLabel();
+  // createLines();
 
-  renderAxeLabel();
-  var socket = new WebSocket("ws:127.0.0.1:6671"); // datapoint = {index:number, value:number}
+  createLinesx(); // createGrid();
 
-  var nodes = {};
-  var config = {
-    X: {
-      normalize: true,
-      index: 1
-    },
-    Y: {
-      normalize: true,
-      index: 2
-    },
-    Z: {
-      normalize: true,
-      index: 3
-    },
-    Size: {
-      normalize: true,
-      index: 4
-    },
-    Luminocity: {
-      normalize: true,
-      index: 5
-    },
-    Blink: {},
-    UpdateRate: 1000,
-    WantsUpdates: true
-  };
+  loadConfigDefaults();
 
   socket.onopen = function (e) {
     console.log("[open] Connection established, send -> server");
@@ -43930,11 +43965,16 @@ function init() {
       var columns = element.split("/");
       nodes[columns[0]] = {
         tag: columns[0],
-        cpu: columns[1],
-        disk: columns[2],
-        memory: columns[3],
-        netin: columns[4],
-        netout: columns[5]
+        1: columns[1],
+        //cpu
+        2: columns[2],
+        // disk
+        3: columns[3],
+        // memory
+        4: columns[4],
+        // net in
+        5: columns[5] // net out
+
       }; // console.log("Node:", columns[0], "cpu: ", columns[1], " disk: ", columns[2], " memory: ", columns[3],  " networkIN: ", columns[4], " networkOUT: ", columns[5])
     });
     render();
@@ -43942,15 +43982,36 @@ function init() {
 
   var cubes = {};
 
+  function loadConfigDefaults() {
+    getID("x-axis").innerHTML = config.X.index;
+    getID("y-axis").innerHTML = config.Y.index;
+    getID("z-axis").innerHTML = config.Z.index;
+  }
+
   function render() {
     Object.keys(nodes).forEach(function (key) {
       if (cubes[nodes[key].tag] === undefined) {
         cubes[nodes[key].tag] = new THREE.Mesh(CUBEGeometry, CUBEMaterial);
         console.log("MAKING A NEW CUBE ...", cubes[nodes[key].tag]);
         scene.add(cubes[nodes[key].tag]);
+      } else {// COMPARE DATA AND DONT RENDER IF THERE IS NO CHANGE
       }
 
-      cubes[nodes[key].tag].position.set(nodes[key].disk / 10, nodes[key].cpu / 10, nodes[key].memory / 10);
+      cubes[nodes[key].tag].position.set(nodes[key][config.X.index] / 100, // X
+      nodes[key][config.Y.index] / 100, // Y
+      nodes[key][config.Z.index] / 100 // Z
+      );
+      var nodeListItem = document.getElementById(key);
+
+      if (nodeListItem === null) {
+        nodeListItem = document.createElement("div");
+        nodeListItem.id = key;
+        nodeListItem.className = "item";
+        document.getElementById("list").appendChild(nodeListItem);
+      }
+
+      var tag = nodes[key].tag + "  >> in[ " + nodes[key][4] + " ] out[ " + nodes[key][5] + " ]";
+      nodeListItem.innerHTML = tag;
     });
   } // EVENT LISTENERS
 
@@ -43966,6 +44027,7 @@ function init() {
 
 function addAxesHelper() {
   axes = new THREE.AxesHelper(AXESLENGTH);
+  axes.position.set(0, 0, 0);
   scene.add(axes);
 }
 /**
@@ -43990,7 +44052,7 @@ function startRenderer() {
   });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  document.getElementById("root").appendChild(renderer.domElement);
 }
 /**
  * @description Render camera and set it's initial position
@@ -43998,8 +44060,8 @@ function startRenderer() {
 
 
 function renderCamera() {
-  camera = new THREE.PerspectiveCamera(initialZoom, window.innerWidth / window.innerHeight, 1, 1000);
-  camera.position.set(15, 20, 30);
+  camera = new THREE.PerspectiveCamera(initialZoom, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(1, 1, 2);
   scene.add(camera);
 }
 /**
@@ -44018,37 +44080,26 @@ function renderAxeLabel() {
     ax: "z",
     name: "DISK 100%"
   }];
-  var loader = new THREE.FontLoader();
-  loader.load("./fonts/helvetiker_regular.typeface.json", function (font) {
-    var textMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff
-    });
-    var textOptions = {
-      font: font,
-      size: 0.2,
-      height: 0.02
-    };
-    labels.map(function (label) {
-      var object = new THREE.TextGeometry("".concat(label.ax, " ").concat(label.name), textOptions);
-      var text = new THREE.Mesh(object, textMaterial);
-      text.name = "axes-label";
-      text.position[label.ax] = AXESLENGTH;
-      scene.add(text);
-    });
-  });
-}
-/**
- * @description Render points
- */
+  var loader = new THREE.FontLoader(); // loader.load("./fonts/helvetiker_regular.typeface.json", function(font) {
 
-
-function renderData() {
-  _data.default.slice(1, 200).map(function (point) {
-    var cube = new THREE.Mesh(CUBEGeometry, CUBEMaterial);
-    cube.position.set(point.position.x / 10, point.position.y / 10, point.position.z / 10);
-    cube.name = point.name;
-    scene.add(cube);
+  console.log("loaded font ...");
+  var textMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff
   });
+  var textOptions = {
+    font: new THREE.Font(),
+    size: 1,
+    height: 0.04
+  };
+  labels.map(function (label) {
+    var object = new THREE.TextGeometry("".concat(label.ax, " ").concat(label.name), textOptions);
+    var text = new THREE.Mesh(object, textMaterial);
+    text.name = "axes-label";
+    text.position[label.ax] = 0;
+    console.log("adding text");
+    scene.add(text);
+  }); // });
+  // console.log("redered text..");
 }
 /**
  * @description On window resize event
@@ -44133,10 +44184,14 @@ function update() {
 
 
 function animate() {
-  requestAnimationFrame(animate);
-  render();
-  update();
-  updateTextRotation();
+  // console.log("animated..");
+  // TODO: introduce a sleep here!
+  setTimeout(function () {
+    requestAnimationFrame(animate);
+    render();
+    update();
+    updateTextRotation();
+  }, 100);
 }
 /**
  * @description This function will render all the content ( scenes, cameras )
@@ -44145,6 +44200,98 @@ function animate() {
 
 function render() {
   renderer.render(scene, camera);
+} // float32 positions on screen
+// xyz > xyz
+// 1,2,3 > 4,5,6
+
+
+function createLinesx() {
+  var startPoint = 0;
+  var wallMaterial = new THREE.LineBasicMaterial({
+    color: 0x8d6722,
+    opacity: 0.5,
+    transparent: true
+  });
+  var start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var g1 = new THREE.BufferGeometry();
+    g1.addAttribute("position", new THREE.BufferAttribute(new Float32Array([start, 0, 0, start, 1, 0]), 3));
+    var xGridLine = new THREE.Line(g1, wallMaterial);
+    scene.add(xGridLine);
+    start = start + 0.2;
+  }
+
+  start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var _g = new THREE.BufferGeometry();
+
+    _g.addAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, start, 0, 1, start]), 3));
+
+    var _xGridLine = new THREE.Line(_g, wallMaterial);
+
+    scene.add(_xGridLine);
+    start = start + 0.2;
+  }
+
+  start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var _g2 = new THREE.BufferGeometry();
+
+    _g2.addAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, start, 1, 0, start]), 3));
+
+    var _xGridLine2 = new THREE.Line(_g2, wallMaterial);
+
+    scene.add(_xGridLine2);
+    start = start + 0.2;
+  }
+
+  start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var _g3 = new THREE.BufferGeometry();
+
+    _g3.addAttribute("position", new THREE.BufferAttribute(new Float32Array([start, 0, 0, start, 0, 1]), 3));
+
+    var _xGridLine3 = new THREE.Line(_g3, wallMaterial);
+
+    scene.add(_xGridLine3);
+    start = start + 0.2;
+  }
+
+  start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var _g4 = new THREE.BufferGeometry();
+
+    _g4.addAttribute("position", new THREE.BufferAttribute(new Float32Array([0, start, 0, 1, start, 0]), 3));
+
+    var _xGridLine4 = new THREE.Line(_g4, wallMaterial);
+
+    scene.add(_xGridLine4);
+    start = start + 0.2;
+  }
+
+  start = 0.2;
+  var i;
+
+  for (i = 0; i < 5; i++) {
+    var _g5 = new THREE.BufferGeometry();
+
+    _g5.addAttribute("position", new THREE.BufferAttribute(new Float32Array([0, start, 0, 0, start, 1]), 3));
+
+    var _xGridLine5 = new THREE.Line(_g5, wallMaterial);
+
+    scene.add(_xGridLine5);
+    start = start + 0.2;
+  }
 }
 },{"./three/three.module.js":"js/three/three.module.js","./helpers/OrbitControls.js":"js/helpers/OrbitControls.js","./data.js":"js/data.js"}],"../../../../../../../../usr/lib/node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
@@ -44174,7 +44321,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "38543" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "36023" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
