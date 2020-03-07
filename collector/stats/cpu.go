@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"log"
 	"runtime"
 
 	"github.com/shirou/gopsutil/process"
@@ -23,6 +24,6 @@ func GetCPUByte() byte {
 		// count++
 	}
 	psTotal = psTotal / float64(runtime.NumCPU())
-	// log.Println("SAVING CPU:", psTotal, int8(psTotal), byte(int8(psTotal)))
+	log.Println("SAVING CPU:", psTotal, int8(psTotal), byte(int8(psTotal)))
 	return byte(int8(psTotal))
 }

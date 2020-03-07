@@ -1,0 +1,394 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 10px;
+}
+
+body {
+  overflow: hidden;
+  font-family: proxima-nova, sans-serif;
+}
+
+ul:not(.browser-default) {
+  padding-left: 0;
+  list-style-type: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
+  font-weight: inherit;
+}
+
+h1 {
+  font-size: 4.2rem;
+  line-height: 110%;
+  margin: 2.8rem 0 1.68rem 0
+}
+
+h2 {
+  font-size: 3.56rem;
+  line-height: 110%;
+  margin: 2.3733333333rem 0 1.424rem 0;
+}
+
+h3 {
+  font-size: 2.92rem;
+  line-height: 110%;
+  margin: 1.9466666667rem 0 1.168rem 0;
+}
+
+h4 {
+  font-size: 2.28rem;
+  line-height: 110%;
+  margin: 1.52rem 0 .912rem 0;
+}
+
+h5 {
+  font-size: 1.64rem;
+  line-height: 110%;
+  margin: 1.0933333333rem 0 .656rem 0;
+}
+
+h6 {
+  font-size: 1.15rem;
+  line-height: 110%;
+  margin: .7666666667rem 0 .46rem 0;
+}
+
+.left-align {
+  text-align: left;
+}
+
+.center-align {
+  text-align: center;
+}
+
+.right-align {
+  text-align: right;
+}
+
+.btn {
+  font-weight: 500;
+  color: #b41155;
+  cursor: pointer;
+  font-size: 36px;
+  z-index: 1;
+}
+
+/* remove all outlines added by browser */
+
+.btn:focus, .tab-btn:focus {
+  outline: 0;
+  box-shadow: none !important;
+}
+
+.btn.panel-trigger {
+  background-color: #65558b;
+  width: 4.8rem;
+  height: 4.8rem;
+  color: #f0ebff;
+  border: none;
+  position: absolute;
+  transition: 0.5s;
+}
+
+.btn.panel-trigger.left {
+  top: 1rem;
+  left: 0;
+}
+
+.btn.panel-trigger.right {
+  top: 0rem;
+  right: 2rem;
+}
+
+.btn.panel-trigger.open.right {
+  transform: translateX(-45rem);
+}
+
+.btn.panel-trigger.open.left {
+  transform: translateX(40rem);
+}
+
+.stats-trigger {
+  background-color: #65558b;
+  color: #f0ebff;
+  position: absolute;
+  border: none;
+  left: -2rem;
+  font-size: 1.5rem;
+  top: 0rem;
+  width: 2rem;
+  height: 100%;
+}
+
+.stats-trigger:focus {
+  outline: none;
+  box-shadow: none !important;
+}
+
+.tab-btn {
+  font-weight: 500;
+  display: flex;
+  height: 100%;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.18);
+  background-color: #2c2343;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  overflow: hidden;
+  border: none;
+  color: rgba(208, 200, 228, 0.69);
+  line-height: normal;
+  font-size: 1.3rem;
+  font-weight: 900;
+  font-style: normal;
+  font-stretch: normal;
+  letter-spacing: normal;
+}
+
+.tab-btn:hover {
+  background-color: #41355d;
+}
+
+.tab-btn.active {
+  background-color: #56457f;
+}
+
+.tab-btn.active:hover {
+  background-color: #6c56a0;
+}
+
+#scene-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  z-index: -1;
+}
+
+.tab {
+  display: none;
+}
+
+.tab.visible {
+  display: grid;
+}
+
+.tab-triggers {
+  font-size: 1.3rem;
+  display: grid;
+  width: 18.2rem;
+  height: 2.5rem;
+  grid-template-columns: 1fr 1fr;
+  /* margin-top: 1.2rem; */
+  margin-bottom: 0.9rem;
+  /* margin-left: 1.1rem; */
+  /* margin-right: 1.1rem; */
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid #56457f;
+}
+
+.panel {
+  background-color: #130c23;
+  position: absolute;
+  border: 0;
+  height: 100%;
+  /* width: 40rem; */
+  transition: 0.5s;
+  z-index: 3;
+  width:42em;
+}
+
+.panel.small {
+  background-color: #2c2343;
+  width: 35rem;
+}
+
+.panel.right {
+  right: -42rem;
+}
+
+.panel.small.big-right {
+  right: -40rem;
+  z-index: 1;
+}
+
+.panel.left {
+  left: -40rem;
+}
+
+.panel.slide.right {
+  transform: translateX(-43rem);
+}
+
+.panel.slide.left {
+  transform: translateX(40rem);
+}
+
+.panel.slide.big-right {
+  transform: translateX(-80rem);
+}
+
+.panel-title {
+  font-weight: normal;
+  height: 25px;
+  font-size: 30px;
+  color: #d0c8e4;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.panel-title.stats {
+  margin-top: 10rem;
+}
+
+.panel-subtitle {
+  font-weight: 600;
+  grid-column-start: span 2;
+  height: 23px;
+  font-size: 20px;
+  color: #299ed0;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.basic-settings, .blinking-settings, .luminosity-settings, .xyz-settings, .color-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-column-gap: 0.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid rgba(86, 73, 119, 1);
+}
+
+.label {
+  grid-column-start: span 1;
+  height: 25px;
+  font-size: 20px;
+  color: #a8a3b2;
+  margin-top: 1.2rem;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.input-group .input-area {
+  width: 45%;
+}
+
+.input-area {
+  grid-column-start: span 1;
+  background-color: #140b2c;
+  color: #d0c8e4;
+  border: none;
+  height: 25px;
+  margin-top: 1.2rem;
+}
+
+.input-area.input-small {
+  width: 45%;
+  justify-self: end;
+}
+
+.server-list {
+  margin-left:12px;
+  font-size: 2rem;
+  margin-top:0px;
+  color: #d0c8e4;
+}
+
+.server-list .single {
+  margin-top: 0.6rem;
+}
+
+.server-list .accordion {
+  margin-top: 1rem;
+  cursor: pointer;
+}
+
+.server-list .accordion.active {
+  color: #b41155;
+}
+
+.server-list .accordion.active .icon {
+  color: #b41155;
+}
+
+.server-list .icon {
+  padding-right: 1rem;
+  color: #299ed0;
+}
+
+.cluster-items {
+  overflow-y: hidden;
+  height: 0;
+}
+
+.cluster-items.active {
+  height: auto;
+}
+
+.cluster-items li {
+  font-size: 1.9rem;
+  margin-left: 6rem;
+  margin-top: 0.7rem;
+}
+
+.settings-container {
+  background-color: #2c2343;
+  /* padding: 2rem; */
+}
+
+.server-list-container {
+  height: 100%;
+  /* width: 206px; */
+  /* padding: 2rem; */
+}
+
+.overall-stats-container {
+  padding: 2rem;
+  z-index: 2;
+}
+
+.stats-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-column-gap: 0.5rem;
+  margin-top: 4rem;
+  border-top: 1px solid rgba(86, 73, 119, 1);
+}
+
+.stats-section.first {
+  border-top: none;
+  margin-top: 5rem;
+}
+
+.section-item {
+  grid-column-start: span 1;
+  color: #a8a3b2;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 1.2rem;
+}
+
+.section-item.white {
+  color: #ffffff;
+}
+
+/* x. Medium screen styles */
+
+/* x. Large screen styles */
+
+/* x. Extra-large screen styles */
+
+/*# sourceMappingURL=/app.ed7d1cf1.css.map */

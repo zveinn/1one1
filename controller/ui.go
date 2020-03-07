@@ -12,7 +12,7 @@ func SaveToUIBuffer(parse chan DPCollection, send chan []byte) {
 	History := make(map[string]DPCollection)
 	for {
 		dpc := <-parse
-		log.Println(dpc)
+		// log.Println(dpc)
 		olddpc, ok := History[dpc.Tag]
 		if ok {
 			hasChanged := false
@@ -53,7 +53,7 @@ func ShipToUIS(send chan []byte) {
 			select {
 			case msg := <-send:
 				if i != 0 && i != 10000 {
-					log.Println("appending byte 44", string(byte(44)))
+					// log.Println("appending byte 44", string(byte(44)))
 					data = append(data, byte(44))
 				}
 				data = append(data, msg...)

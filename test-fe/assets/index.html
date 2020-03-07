@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<meta content="utf-8" http-equiv="encoding">
+
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link content="text/css" rel="stylesheet" href="css/normalize.css">
+
+	<!-- load font awesome -->
+	<link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.9.0/css/all.css"
+		integrity="sha384-vlOMx0hKjUCl4WzuhIhSNZSm2yQCaf0mOU1hEDK/iztH3gU4v5NMmJln9273A6Jz" crossorigin="anonymous">
+
+	<!-- load text font -->
+	<link rel="stylesheet" href="https://use.typekit.net/qqz2uno.css">
+
+	<!-- Style -->
+	<link content="text/css" rel="stylesheet" href="css/app.css">
+	<style>
+		.selectBox {
+			border: 1px solid #55aaff;
+			background-color: rgba(75, 160, 255, 0.3);
+			position: fixed;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="scene-container">
+		<!-- This holds the scene -->
+	</div>
+
+	<!-- panels container -->
+	<div class="panels-container">
+		<!-- server list panel -->
+		<!-- panel trigger button -->
+		<button class="btn panel-trigger right" data-open="server-list-menu">&#9776;</button>
+
+		<div id="server-list-menu" class="server-list-container panel right">
+			<!-- overall stats open / close button -->
+			<button class="btn stats-trigger" data-open="overall-stats-list"><i
+					class="far fa-chevron-left"></i></button>
+
+			<div class="tabs-container">
+				<div class="tab-triggers">
+					<!-- tab triggers -->
+					<button class="tab-btn active" data-target="all-servers-tab">Servers</button>
+					<button class="tab-btn" data-target="selected-servers-tab">Selected</button>
+				</div>
+
+				<!-- tab content -->
+				<div id="all-servers-tab" class="tab visible">
+					<ul id="all-servers-list" class="server-list">
+						<!-- list will be generated with JS -->
+					</ul>
+				</div>
+
+				<div id="selected-servers-tab" class="tab">
+					<ul id="selected-list" class="server-list">
+						<!-- list will be generated from JS -->
+					</ul>
+				</div>
+			</div>
+		</div>
+
+		<!-- overall status list  panel-->
+		<div id="overall-stats-list" class="overall-stats-container panel small big-right">
+			<div class="panel-title stats">Overall stats</div>
+
+			<div class="stats-section first">
+				<span class="section-item">Users</span>
+				<span class="section-item white">10</span>
+
+				<span class="section-item">Hosts</span>
+				<span class="section-item white">200</span>
+
+				<span class="section-item">Mr</span>
+				<span class="section-item white">2000/s</span>
+			</div>
+
+			<div class="stats-section">
+				<span class="section-item">Overall CPU usage</span>
+				<span class="section-item white">75%</span>
+
+				<span class="section-item">Number of cores</span>
+				<span class="section-item white">100</span>
+
+				<span class="section-item">Average temp</span>
+				<span class="section-item white">40&#176; C</span>
+			</div>
+
+			<div class="stats-section">
+				<span class="section-item">Disk usage</span>
+				<span class="section-item white">80%</span>
+
+				<span class="section-item">Number of disks</span>
+				<span class="section-item white">300</span>
+
+				<span class="section-item">Storage capacity</span>
+				<span class="section-item white">1/100 TB</span>
+			</div>
+
+			<div class="stats-section">
+				<span class="section-item">Memory</span>
+				<span class="section-item white">2/16 TB</span>
+			</div>
+
+			<div class="stats-section">
+				<span class="section-item">Network in</span>
+				<span class="section-item white">1.223 GB/s</span>
+
+				<span class="section-item">Network out</span>
+				<span class="section-item white">1.325 GB/s</span>
+			</div>
+
+			<div class="stats-section">
+				<span class="section-item">Refresh rate</span>
+				<span class="section-item white">3 s</span>
+
+				<span class="section-item">Color mode</span>
+				<span class="section-item white">Dark</span>
+			</div>
+		</div>
+
+		<!-- settings menu panel -->
+		<button class="btn panel-trigger left" data-open="settings-menu">&#9776;</button>
+
+		<div id="settings-menu" class="settings-container panel left">
+			<div class="panel-title">Settings</div>
+
+			<div class="tabs-container">
+				<div class="tab-triggers">
+					<button class="tab-btn active" data-target-id="basic-settings-container">Basic</button>
+					<button class="tab-btn" data-target-id="advanced-settings-container">Advanced</button>
+				</div>
+
+				<div id="basic-settings-container" class="tab visible">
+					<div class="basic-settings">
+						<label class="label" for="update-rate">Update rate:</label>
+						<input class="input-area" type="text" name="update-rate">
+
+						<label class="label" for="theme">Theme</label>
+						<select class="input-area" name="theme">
+							<option value="dark-theme">Dark theme</option>
+							<option value="light-theme">Light theme</option>
+						</select>
+
+						<label class="label" for="dimension">Dimension</label>
+						<input class="input-area" type="text">
+					</div>
+				</div>
+
+				<div id="advanced-settings-container" class="tab">
+					<div class="blinking-settings">
+						<div class="panel-subtitle">Blinking</div>
+
+						<label for="namespace" class="label">Namespace:</label>
+						<input class="input-area" type="text" name="namespace">
+
+						<label for="rate" class="label">Rate:</label>
+						<div class="input-group">
+							<input class="input-area" type="text" name="rate">
+							<input class="input-area" type="text" name="">
+						</div>
+
+						<label for="threshold" class="label">Threshold:</label>
+						<input class="input-area" type="text" name="threshold">
+
+						<label for="step-threshold" class="label">Step Threshold:</label>
+						<input class="input-area input-small" type="text" name="step-threshold">
+
+						<label for="s-blink-increase" class="label">Step Blink Increase:</label>
+						<input class="input-area input-small" type="text" name="s-blink-increase">
+					</div>
+
+					<div class="luminosity-settings">
+						<div class="divider"></div>
+						<div class="panel-subtitle">Luminosity</div>
+
+						<label class="label" for="lum-namespace">Namespace:</label>
+						<input class="input-area" type="text" name="lum-namespace">
+
+						<label class="label" for="direction">Direction:</label>
+						<select class="input-area" name="direction">
+							<option value="high-to-low">High to low</option>
+							<option value="low-to-high">Low to high</option>
+						</select>
+
+						<label class="label" for="lum-threshold">Namespace:</label>
+						<input class="input-area" type="text" name="lum-threshold">
+					</div>
+
+					<div class="xyz-settings">
+						<div class="divider"></div>
+						<div class="panel-subtitle">X Y Z</div>
+
+						<label class="label" for="xyz-namespace">Namespace:</label>
+						<input class="input-area" type="text" name="xyz-namespace">
+
+						<label class="label" for="xyz-direction">Direction:</label>
+						<select class="input-area" name="xyz-direction">
+							<option value="down">Down</option>
+							<option value="up">Up</option>
+						</select>
+
+						<label class="label" for="normalize">Normalize:</label>
+						<select class="input-area" name="normalize">
+							<option value="yes">Yes</option>
+							<option value="no">No</option>
+						</select>
+					</div>
+
+					<div class="color-settings">
+						<div class="divider"></div>
+						<div class="panel-subtitle">Color</div>
+
+						<label class="label" for="tag">Tag:</label>
+						<input class="input-area" type="text" name="tag">
+
+						<label class="label" for="default-color">Default Color:</label>
+						<input class="input-area input-small" type="color" name="default-color">
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<script src="vendor/threeJs/three.js"></script>
+	<script src="vendor/threeJs/orbital-controls.js"></script>
+	<script src="js/selection-box.js"></script>
+	<script src="js/selection-helper.js"></script>
+	<script src="js/core.js"></script>
+	<script src="js/panels.js"></script>
+	<script src="js/tabs.js"></script>
+	<script src="js/accordion.js"></script>
+</body>
+
+</html>

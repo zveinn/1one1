@@ -16,13 +16,13 @@ var CUBEMaterial = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide
 });
 
-let socket = new WebSocket("ws:127.0.0.1:6671");
+let socket = new WebSocket("ws:167.172.180.181:6671");
 // datapoint = {index:number, value:number}
 var nodes = {};
 var config = {
-  X: { normalize: true, index: 2 },
+  X: { normalize: true, index: 3 },
   Y: { normalize: true, index: 1 },
-  Z: { normalize: true, index: 3 },
+  Z: { normalize: true, index: 2 },
   Size: { normalize: true, index: 4 },
   Luminocity: { normalize: true, index: 5 },
   Blink: {}
@@ -37,12 +37,12 @@ function getID(id) {
 }
 document
   .getElementById("update-settings")
-  .addEventListener("click", function() {
+  .addEventListener("click", function () {
     config.X = { normalize: true, index: getID("x-axis").innerHTML };
   });
 document
   .getElementById("list-button")
-  .addEventListener("click", function(event) {
+  .addEventListener("click", function (event) {
     console.dir(event);
     let target = document.getElementById("list");
     if (target.className === "hide") {
@@ -54,7 +54,7 @@ document
 
 document
   .getElementById("settings-button")
-  .addEventListener("click", function(event) {
+  .addEventListener("click", function (event) {
     console.dir(event);
     let target = document.getElementById("settings");
     if (target.className === "hide") {
@@ -80,25 +80,28 @@ function init() {
   // createGrid();
   loadConfigDefaults();
 
-  socket.onopen = function(e) {
+  socket.onopen = function (e) {
     console.log("[open] Connection established, send -> server");
     socket.send(JSON.stringify(config));
   };
 
-  socket.onmessage = function(event) {
-    console.log(`[message] Data received: ${event.data} <- server`);
+  socket.onmessage = function (event) {
+    // console.log(`[message] Data received: ${event.data} <- server`);
     // var dpc = JSON.parse(event.data)
     // console.dir(event.data)
+
     let dataCollections = event.data.split(",");
     dataCollections.forEach(element => {
       let columns = element.split("/");
+      let netIn = Number(columns[4]) / 1000000
+      let netOut = Number(columns[5]) / 1000000
       nodes[columns[0]] = {
         tag: columns[0],
         1: columns[1], //cpu
         2: columns[2], // disk
         3: columns[3], // memory
-        4: columns[4], // net in
-        5: columns[5] // net out
+        4: netIn.toString(), // net in
+        5: netOut.toString() // net out
       };
       // console.log("Node:", columns[0], "cpu: ", columns[1], " disk: ", columns[2], " memory: ", columns[3],  " networkIN: ", columns[4], " networkOUT: ", columns[5])
     });
@@ -113,7 +116,10 @@ function init() {
   }
 
   function render() {
-    Object.keys(nodes).forEach(key => {
+    let xx = Object.keys(nodes).sort(function (a, b) { return nodes[b][3] - nodes[a][3] })
+    // console.dir(xx)
+    document.getElementById("list").innerHTML = ""
+    xx.forEach(key => {
       if (cubes[nodes[key].tag] === undefined) {
         cubes[nodes[key].tag] = new THREE.Mesh(CUBEGeometry, CUBEMaterial);
 
@@ -123,30 +129,45 @@ function init() {
       } else {
         // COMPARE DATA AND DONT RENDER IF THERE IS NO CHANGE
       }
+      let inAndOut = Number(nodes[key][4]) + Number(nodes[key][5])
+      // cubes[nodes[key].tag].position.set(
+      //   nodes[key][config.X.index] / 100, // X
+      //   nodes[key][config.Y.index] / 100, // Y
+      //   inAndOut / 100, // Z
+      // );
+
       cubes[nodes[key].tag].position.set(
-        nodes[key][config.X.index] / 100, // X
-        nodes[key][config.Y.index] / 100, // Y
-        nodes[key][config.Z.index] / 100 // Z
+
+        nodes[key][config.X.index] / 100,
+        inAndOut / 100,
+        nodes[key][config.Y.index] / 100,
+
       );
 
-      let nodeListItem = document.getElementById(key);
-      if (nodeListItem === null) {
-        nodeListItem = document.createElement("div");
-        nodeListItem.id = key;
-        nodeListItem.className = "item";
-        document.getElementById("list").appendChild(nodeListItem);
-      }
+      // let nodeListItem = document.getElementById(key);
+      // if (nodeListItem === null) {
+      let nodeListItem = document.createElement("div");
+      nodeListItem.id = key;
+      nodeListItem.className = "item";
+      document.getElementById("list").appendChild(nodeListItem);
+      // }
+
+
 
       let tag =
         nodes[key].tag +
-        "  >> in[ " +
-        nodes[key][4] +
+        "  >> mem/cpu [ " +
+        nodes[key][3] + "/" + nodes[key][1] +
+        " ] >> in[ " +
+        Math.round(nodes[key][4] * 100) / 100 +
         " ] out[ " +
-        nodes[key][5] +
+        Math.round(nodes[key][5] * 100) / 100
+        +
         " ]";
 
       nodeListItem.innerHTML = tag;
     });
+
   }
 
   // EVENT LISTENERS
@@ -316,10 +337,10 @@ function update() {
 function animate() {
   // console.log("animated..");
   // TODO: introduce a sleep here!
-    requestAnimationFrame(animate);
-    render();
-    update();
-    updateTextRotation();
+  requestAnimationFrame(animate);
+  render();
+  update();
+  updateTextRotation();
 }
 
 /**
