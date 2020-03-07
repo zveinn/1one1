@@ -23661,74 +23661,8 @@ var mesh;
 var controls;
 var object;
 var raycaster;
-// let data = {
-//   "groups": {
-//     "group0": {
-//       "x": 0.4159240298228717,
-//       "y": 0.30985597389307695,
-//       "z": 0.11883011642484208
-//     },
-//     "group4": {
-//       "x": 0.05094092855738649,
-//       "y": 0.09938172107540882,
-//       "z": 0.15130238962656856
-//     },
-//     "group6": {
-//       "x": 0.04992061657675103,
-//       "y": 0.11220079703737104,
-//       "z": 0.47678027988674454
-//     },
-//     "group8": {
-//       "x": 0.6572444401142241,
-//       "y": 0.5328621726559709,
-//       "z": 0.7593524595341643
-//     }
-//   },
-//   "dataPoints": {
-//     "us.newyork.dc1.be.25": {
-//       "groupTag": "group0",
-//       "x": 0.7335282404198084,
-//       "y": 0.8636391735537683,
-//       "z": 0.9548256496989751
-//     },
-//     "ger.munich.xx2.xe.28": {
-//       "groupTag": "group0",
-//       "x": 0.3382333151396125,
-//       "y": 0.8455760743771621,
-//       "z": 0.29128736215957035
-//     },
-//     "ger.munich.xx2.xe.38": {
-//       "groupTag": "group4",
-//       "x": 0.5690345363304049,
-//       "y": 0.8976976535297126,
-//       "z": 0.7191543108783685
-//     },
-//     "us.newyork.dc1.be.0": {
-//       "groupTag": "group6",
-//       "x": 0.6327394101398829,
-//       "y": 0.9446228737318466,
-//       "z": 0.775828199749101
-//     },
-//     "us.newyork.dc1.be.42": {
-//       "groupTag": "group8",
-//       "x": 0.47957390033787695,
-//       "y": 0.6325982257356839,
-//       "z": 0.4774096257260159
-//     },
-//     "us.newyork.dc1.be.45": {
-//       "groupTag": "",
-//       "x": 0.57957390033787695,
-//       "y": 0.6325982257356839,
-//       "z": 0.4774096257260159
-//     },
-//     "us.newyork.dc1.be.400": {
-//       "groupTag": "",
-//       "x": 0.80957390033787695,
-//       "y": 0.6325982257356839,
-//       "z": 0.4774096257260159
-//     }
-//   }
-// }
+var serverList = document.getElementById("all-servers-list");
+var selectedList = document.getElementById("selected-list");
 var socket = new WebSocket("ws:167.172.180.181:6671");
 var nodes = {};
 var config = {
@@ -23744,20 +23678,12 @@ var config = {
   },
   Z: {
     normalize: true,
-    index: 2,
+    index: 1,
     label: "CPU %"
   },
-  Size: {
-    normalize: true,
-    index: 4
-  },
-  Luminocity: {
-    normalize: true,
-    index: 5
-  },
-  Blink: {} // UpdateRate: 1000,
-  // WantsUpdates: true
-
+  SORT: {
+    index: 3
+  }
 }; // call the init function to set everything up
 
 init();
@@ -23767,7 +23693,7 @@ function init() {
   container = document.querySelector("#scene-container"); // create a Scene
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000b36);
+  scene.background = new THREE.Color(0x000000);
   createCamera();
   createControls();
   createLights();
@@ -23779,8 +23705,8 @@ function init() {
   // }, 500);
 
   createLabel(config.Y.label, 0.03, 0.001, 0, 1.04, 0.1, 0, 0.7, 0);
-  createLabel(config.X.label, 0.04, 0.001, 1.02, 0, 0, 0, 0, 0);
-  createLabel(config.Z.label, 0.04, 0.001, 0, 0, 1.12, 0, 1.6, 0);
+  createLabel(config.X.label, 0.04, 0.001, 1.05, 0, 0.1, 0, 1, 0);
+  createLabel(config.Z.label, 0.04, 0.001, 0, 0, 1.15, 0, 1.2, 0);
   var geometry = new THREE.BoxBufferGeometry(1, 1, 1);
 
   socket.onopen = function (e) {
@@ -23814,12 +23740,37 @@ function init() {
     }); // console.log("render")
     // render();
     // createServerList()
-  };
+  }; // To start the loop
+
 
   renderer.setAnimationLoop(function () {
     // console.log("render")
     scene.dispose();
     render();
+  });
+}
+
+var renderServerListLoop = setInterval(function () {
+  // Do your update stuff...
+  console.log("render !");
+  renderServerList();
+}, 1300);
+
+function renderServerList() {
+  serverList.innerHTML = "";
+  var xx = Object.keys(nodes).sort(function (a, b) {
+    return nodes[b][5] + nodes[b][4] - (nodes[a][5] + nodes[a][4]);
+  });
+  xx.forEach(function (node, i) {
+    var container = document.createElement("div");
+    var tag = document.createElement("div");
+    tag.className = "server-tag-in-list";
+    var stats = document.createElement("div");
+    tag.innerHTML = node;
+    stats.innerHTML = " cpu[" + nodes[node][1] + "] mem[" + nodes[node][3] + "] in[" + Math.round(nodes[node][4]) + "] out[" + Math.round(nodes[node][5]) + "] disk[" + nodes[node][2] + "]";
+    container.appendChild(tag);
+    container.appendChild(stats);
+    serverList.appendChild(container);
   });
 }
 
@@ -23993,58 +23944,29 @@ function createLabel(labelText, size, offset, x, y, z, rx, ry, rz) {
   });
 }
 
-function generateGroup(geometry, groups, totals) {
-  for (var groupedServers in groups) {
-    object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-      color: 0xff0000
-    }));
-    var offset = 0;
-    object.position.x = 1 * groups[groupedServers].x - 0.5;
-    object.position.y = 1 * groups[groupedServers].y - 0.5;
-    object.position.z = 1 * groups[groupedServers].z - 0.5;
-    object.material.color.setHex(0x00ff00);
-    object.scale.x = 0.03;
-    object.scale.y = 0.03;
-    object.scale.z = 0.03;
-    offset = 0.02;
-    var label = "" + totals[groupedServers];
-    createLabel(label, 0.006, offset, object.position.x, object.position.y, object.position.z);
-    var objTarget = generateShapeTarget(groupedServers);
-    object.userData.group = objTarget;
-    object.userData.isSelectable = true;
-    object.userData.selected = false;
-    object.name = groupedServers; // create label for the object
-
-    scene.add(objTarget);
-    scene.add(object);
-  }
-}
-
 function checkDataPointForAlerts(dp, targeting) {
-  var shouldUpdateLines = false; // console.log(dp.position.x, dp.position.y, dp.position.z)
+  if (dp.userData.selected) {
+    return;
+  }
+
+  var shouldUpdateLines = false;
 
   if (dp.position.y >= 0.9) {
-    // console.log("Y:", dp.position.y, dp.name)
     targeting.visible = true;
     shouldUpdateLines = true;
-    dp.material.emissive = new THREE.Color(0x000000);
-  } else {// dp.material.emissive = new THREE.Color(0x0000ff);
+    dp.material.emissive = new THREE.Color(0xff0000);
   }
 
   if (dp.position.x >= 0.9 || dp.position.x < 0.3) {
-    // console.log("X:", dp.position.x, dp.name)
     targeting.visible = true;
     shouldUpdateLines = true;
-    dp.material.emissive = new THREE.Color(0x000000);
-  } else {// dp.material.emissive = new THREE.Color(0x0000ff);
+    dp.material.emissive = new THREE.Color(0xff0000);
   }
 
   if (dp.position.z >= 0.9) {
-    // console.log("Z:", dp.position.z, dp.name)
     targeting.visible = true;
     shouldUpdateLines = true;
-    dp.material.emissive = new THREE.Color(0x000000);
-  } else {// dp.material.emissive = new THREE.Color(0x0000ff);
+    dp.material.emissive = new THREE.Color(0xff0000);
   }
 
   if (shouldUpdateLines) {
@@ -24098,16 +24020,13 @@ function checkDataPointForAlerts(dp, targeting) {
   }
 }
 
-var serverList = document.getElementById("all-servers-list");
-var setNodes = new Set();
-
 function processDataPoint(geometry, dp) {
   var odp = scene.getObjectByName(dp["tag"]);
 
   if (odp !== undefined) {
     var odpt = scene.getObjectByName(dp["tag"] + "-target");
-    odp.position.x = dp[3] / 100;
-    odp.position.z = dp[1] / 100;
+    odp.position.x = dp[config.X.index] / 100;
+    odp.position.z = dp[config.Z.index] / 100;
     odp.position.y = (dp[4] + dp[5]) / 100; // if (odp.name === "node-lon1-01") {
     // console.dir(odpt)
 
@@ -24190,16 +24109,11 @@ function processDataPoint(geometry, dp) {
   object.userData.group = targetGroup;
   object.userData.isSelectable = true;
   object.userData.selected = false;
-  object.name = dp["tag"]; // create label for the object
+  object.name = dp["tag"];
+  object.type = "node"; // create label for the object
 
   scene.add(targetGroup);
   scene.add(object);
-  var singlePointElement = document.createElement("li");
-  var singlePointContainer = document.createElement("span");
-  var singlePointElementText = document.createTextNode(object.name);
-  singlePointContainer.appendChild(singlePointElementText);
-  singlePointElement.appendChild(singlePointContainer);
-  serverList.appendChild(singlePointElement);
 }
 
 function generateShapeTarget(targetObject) {
@@ -24271,6 +24185,7 @@ function ctrlPress(event) {
   if (event.ctrlKey) {
     controls.enabled = false;
     helper.enabled = true;
+    document.getElementById("mode-title").innerHTML = "HELPER MODE";
   }
 }
 
@@ -24278,10 +24193,9 @@ function ctrlRelease(event) {
   if (!event.ctrlKey) {
     controls.enabled = true;
     helper.enabled = false;
+    document.getElementById("mode-title").innerHTML = "";
   }
 }
-
-var selectedList = document.getElementById("selected-list");
 
 function onDocumentMouseDown(event) {
   if (!helper.enabled) {
@@ -24314,10 +24228,7 @@ function onDocumentMouseDown(event) {
     }
   }
 
-  while (selectedList.hasChildNodes()) {
-    selectedList.removeChild(selectedList.firstChild);
-  }
-
+  selectedList.innerHTML = "";
   selectionBox.startPoint.set(event.clientX / window.innerWidth * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1, 0.5);
 }
 
@@ -24327,32 +24238,34 @@ function onDocumentMouseMove(event) {
   }
 
   if (helper.isDown) {
-    for (var i = 0; i < selectionBox.collection.length; i++) {
-      selectionBox.collection[i].material.emissive = new THREE.Color(0x000000);
-    }
-
-    selectionBox.endPoint.set(event.clientX / window.innerWidth * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1, 0.5);
-    var allSelected = selectionBox.select();
-
-    for (var i = 0; i < allSelected.length; i++) {
-      allSelected[i].material.emissive = new THREE.Color(0x0000ff);
-      allSelected[i].userData.selected = true;
-      allSelected[i].userData.group.visible = true;
-    }
+    markAllUnderSelectBox(event);
   }
 }
 
-function onDocumentMouseUp(event) {
+function markAllUnderSelectBox(event) {
   if (!helper.enabled) {
     return;
   }
 
   selectionBox.endPoint.set(event.clientX / window.innerWidth * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1, 0.5);
+
+  for (var i = 0; i < selectionBox.collection.length; i++) {
+    selectionBox.collection[i].material.emissive = new THREE.Color(0x000000);
+  }
+
+  scene.traverse(function (node) {
+    if (node.type === "node") {
+      node.userData.group.visible = false;
+    }
+  });
+  selectedList.innerHTML = "";
   var allSelected = selectionBox.select();
 
   for (var i = 0; i < allSelected.length; i++) {
     allSelected[i].material.emissive = new THREE.Color(0x0000ff);
     var node = document.createElement("li");
+    allSelected[i].userData.selected = true;
+    allSelected[i].userData.group.visible = true;
     var textNode = document.createTextNode(allSelected[i].name);
     node.appendChild(textNode);
     selectedList.appendChild(node);
@@ -24360,7 +24273,16 @@ function onDocumentMouseUp(event) {
 }
 
 function onSelectedListMouseOver(event) {
+  if (event.target.innerHTML === undefined) {
+    return;
+  }
+
   var object = scene.getObjectByName(event.target.innerHTML);
+
+  if (object === undefined) {
+    return;
+  }
+
   var objectTarget = scene.getObjectByName(object.userData.group.name);
   object.material.emissive = new THREE.Color(0xffff00);
   var _iteratorNormalCompletion5 = true;
@@ -24415,8 +24337,7 @@ function onSelectedListMouseOut(event) {
       }
     }
   }
-} // let serverList = document.getElementById("all-servers-list");
-
+}
 
 function onServerListMouseOver(event) {
   if (event.target.tagName == "SPAN") {
@@ -24498,8 +24419,8 @@ window.addEventListener("resize", onWindowResize, false);
 document.addEventListener("keydown", ctrlPress);
 document.addEventListener("keyup", ctrlRelease);
 document.addEventListener("mousedown", onDocumentMouseDown);
-document.addEventListener("mousemove", onDocumentMouseMove);
-document.addEventListener("mouseup", onDocumentMouseUp);
+document.addEventListener("mousemove", onDocumentMouseMove); // document.addEventListener("mouseup", onDocumentMouseUp);
+
 selectedList.addEventListener("mouseover", onSelectedListMouseOver);
 selectedList.addEventListener("mouseout", onSelectedListMouseOut);
 serverList.addEventListener("mouseover", onServerListMouseOver);
@@ -24532,7 +24453,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "39237" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "41555" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
