@@ -1,8 +1,10 @@
 {
-    "default":[
+    "controller": "127.0.0.1:6670",
+    "tag": "local2",
+    "default": [
         {
-            "tag":"*",
-            "namespaces":[
+            "tag": "*",
+            "namespaces": [
                 "cpu.percentage",
                 "disk.percentage",
                 "memory.percentage",
@@ -11,10 +13,10 @@
             ]
         }
     ],
-    "custom":[
+    "custom": [
         {
-            "tag":".web.",
-            "namespaces":[
+            "tag": ".web.",
+            "namespaces": [
                 "cpu.percentage",
                 "disk.percentage",
                 "memory.percentage"
