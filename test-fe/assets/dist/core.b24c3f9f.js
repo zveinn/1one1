@@ -23957,7 +23957,7 @@ function checkDataPointForAlerts(dp, targeting) {
     dp.material.emissive = new THREE.Color(0xff0000);
   }
 
-  if (dp.position.x >= 0.9 || dp.position.x < 0.3) {
+  if (dp.position.x >= 0.9) {
     targeting.visible = true;
     shouldUpdateLines = true;
     dp.material.emissive = new THREE.Color(0xff0000);
@@ -24453,7 +24453,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "41555" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "44575" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};

@@ -13,6 +13,8 @@ type DiskStatic struct {
 }
 
 func GetDiskByte() byte {
+	// xx, ss := disk.Partitions(true)
+	// log.Println("asdasd", xx, ss)
 	diskStat, err := disk.Usage("/")
 	helpers.PanicX(err)
 	// log.Println("SAVING DISK:", diskStat.UsedPercent, int8(diskStat.UsedPercent), byte(int8(diskStat.UsedPercent)))

@@ -330,7 +330,7 @@ function checkDataPointForAlerts(dp, targeting) {
     shouldUpdateLines = true
     dp.material.emissive = new THREE.Color(0xff0000);
   }
-  if (dp.position.x >= 0.9 || dp.position.x < 0.3) {
+  if (dp.position.x >= 0.9) {
     targeting.visible = true;
     shouldUpdateLines = true
     dp.material.emissive = new THREE.Color(0xff0000);
