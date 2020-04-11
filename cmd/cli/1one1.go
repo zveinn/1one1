@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/brain"
 	"github.com/zkynetio/lynx/collector"
 	"github.com/zkynetio/lynx/controller"
@@ -26,9 +30,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		controller.Start(*connect)
+		cfg := readControllerConfig()
+		alerting := ReadAlertingConfig()
+		controller.Start(*connect, &cfg, alerting)
 	case "brain":
-		brain.Start()
+		newBrain := NewBrain()
+		brain.Start(&newBrain)
 	case "collector":
 
 		if *connect == "" {
@@ -52,4 +59,59 @@ func main() {
 
 	}
 
+}
+
+func ReadAlertingConfig() []alerting.Alerting {
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var alertingSlice []alerting.Alerting
+
+	for _, f := range files {
+		if strings.Contains(f.Name(), "alerts") {
+			file, err := ioutil.ReadFile(f.Name())
+			if err != nil {
+				panic(err)
+			}
+
+			data := alerting.Alerting{}
+			_ = json.Unmarshal([]byte(file), &data)
+			alertingSlice = append(alertingSlice, data)
+		}
+	}
+	return alertingSlice
+}
+
+func NewBrain() brain.Brain {
+	file, err := ioutil.ReadFile("brain.json")
+	if err != nil {
+		panic(err)
+	}
+	data := brain.Config{}
+	_ = json.Unmarshal([]byte(file), &data)
+	// b.Config = data
+	return brain.Brain{
+		Config: data,
+	}
+
+}
+func ReadCollectionConfig() {
+	file, err := ioutil.ReadFile("collector.json")
+	if err != nil {
+		panic(err)
+	}
+	data := brain.Collecting{}
+	_ = json.Unmarshal([]byte(file), &data)
+	log.Println(data)
+}
+func readControllerConfig() controller.ControllerConfig {
+	file, err := ioutil.ReadFile("controller.json")
+	if err != nil {
+		panic(err)
+	}
+	data := controller.ControllerConfig{}
+	_ = json.Unmarshal([]byte(file), &data)
+	return data
 }

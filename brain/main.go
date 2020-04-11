@@ -3,9 +3,6 @@ package brain
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -15,144 +12,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/zkynetio/lynx/alerting"
 	"github.com/zkynetio/lynx/helpers"
 )
 
 var GlobalBrain *Brain
 
-func ReadCollectionConfig(b *Brain) {
-	file, err := ioutil.ReadFile("collecting.json")
-	if err != nil {
-		panic(err)
-	}
-	data := Collecting{}
-	_ = json.Unmarshal([]byte(file), &data)
-	b.Collecting = data
-}
-func ReadConfigs(b *Brain) {
-	for {
-		time.Sleep(5 * time.Second)
-		oldBrain := *b
-		// log.Println(b)
-		ReadBrainConfig(b)
-		ReadCollectionConfig(b)
-		ReadAlertingConfig(b)
+func Start(brain *Brain) {
 
-		// TODO send configs !
+	GlobalBrain = brain
 
-		// log.Println("config has changed !!")
-		hasChanged := false
-		if !cmp.Equal(b.Config.AlertingConfigs, oldBrain.Config.AlertingConfigs) {
-			log.Println("alerting has changed")
-			hasChanged = true
-		}
-		if !cmp.Equal(b.Collecting, oldBrain.Collecting) {
-			log.Println("cllecting has changed")
-			hasChanged = true
-		}
-
-		// we only need to check for removed clust
-		for _, cluster1 := range oldBrain.Config.Clusters {
-			for _, cluster2 := range b.Config.Clusters {
-				if cluster2.Tag == cluster1.Tag {
-					for _, cont1 := range cluster2.Controllers {
-						for _, cont2 := range b.Controllers {
-							if cont2.Config.Tag == cont1.Tag {
-								if cont2.Config.IP != cont1.IP {
-									hasChanged = true
-								}
-								if cont2.Config.Restart != cont1.Restart {
-									hasChanged = true
-								}
-								if cont2.Config.Shutdown != cont1.Shutdown {
-									hasChanged = true
-								}
-								if cont2.Config.Debug != cont1.Debug {
-									hasChanged = true
-								}
-								if cont2.Config.Collector.IP != cont1.Collector.IP {
-									hasChanged = true
-								}
-								if cont2.Config.Collector.Port != cont1.Collector.Port {
-									hasChanged = true
-								}
-								if cont2.Config.UI.IP != cont1.UI.IP {
-									hasChanged = true
-								}
-								if cont2.Config.UI.Port != cont1.UI.Port {
-									hasChanged = true
-								}
-							}
-						}
-					}
-
-				}
-			}
-		}
-
-		if hasChanged {
-			for _, v := range b.Controllers {
-				b.SendBrainToController(v)
-			}
-		} else {
-			log.Println("no config change !")
-		}
-
-		if oldBrain.Config.IP != b.Config.IP || oldBrain.Config.Port != b.Config.Port {
-			b.SendNewAddressToControllers(b.Config.IP + ":" + strconv.Itoa(b.Config.Port))
-		}
-	}
-}
-func ReadBrainConfig(b *Brain) {
-	file, err := ioutil.ReadFile("brain.json")
-	if err != nil {
-		panic(err)
-	}
-	data := Config{}
-	_ = json.Unmarshal([]byte(file), &data)
-	b.Config = data
-
-}
-func ReadAlertingConfig(b *Brain) {
-
-	files, err := ioutil.ReadDir(".")
-	if err != nil {
-		log.Fatal(err)
-	}
-	b.Alerting = nil
-	for _, f := range files {
-		if strings.Contains(f.Name(), "alerts") {
-			file, err := ioutil.ReadFile(f.Name())
-			if err != nil {
-				panic(err)
-			}
-
-			data := alerting.Alerting{}
-			_ = json.Unmarshal([]byte(file), &data)
-			b.Alerting = append(b.Alerting, data)
-			// b.Alerting[data.Name] = data
-		}
-	}
-}
-func Start() {
-
-	Brain := Brain{}
-	ReadBrainConfig(&Brain)
-	ReadAlertingConfig(&Brain)
-	ReadCollectionConfig(&Brain)
-	GlobalBrain = &Brain
-
-	go ReadConfigs(&Brain)
-
-	log.Println(Brain.Config)
-	log.Println(Brain.Alerting)
-	log.Println(Brain.Collecting)
+	log.Println(GlobalBrain.Config)
+	log.Println(GlobalBrain.Alerting)
 
 	watcherChannel := make(chan int)
 	stop := make(chan os.Signal, 1)
-	go Brain.ListenForControllers(watcherChannel)
+	go GlobalBrain.ListenForControllers(watcherChannel)
 
 	signal.Notify(stop, os.Interrupt)
 	for {
@@ -160,7 +34,7 @@ func Start() {
 		case index := <-watcherChannel:
 			time.Sleep(1 * time.Second)
 			if index == 1 {
-				go Brain.ListenForControllers(watcherChannel)
+				go GlobalBrain.ListenForControllers(watcherChannel)
 			}
 			log.Println("goroutine number", index, "just closed...")
 			break
@@ -215,84 +89,86 @@ func (b *Brain) acceptController(socket net.Conn) {
 	LC := LiveController{
 		Socket: socket,
 	}
-	err := b.AssignControllerToIPAndPort(&LC)
-	if err != nil {
-		log.Println("Could not assign controller to an IP and PORT", err)
-		socket.Close()
-		return
-	}
+	// err := b.AssignControllerToIPAndPort(&LC)
+	// if err != nil {
+	// 	log.Println("Could not assign controller to an IP and PORT", err)
+	// 	socket.Close()
+	// 	return
+	// }
 	log.Println("found config", LC.Config)
-	b.SendConfigToController(&LC)
-	b.SendBrainToController(&LC)
+	// b.SendConfigToController(&LC)
+	// b.SendBrainToController(&LC)
 	b.AddController(&LC)
 	LC.ListenToController()
 }
-func (b *Brain) SendConfigToController(LC *LiveController) {
 
-	jsonConfig, err := json.Marshal(LC.Config)
-	if err != nil {
-		panic(err)
-	}
+// func (b *Brain) SendConfigToController(LC *LiveController) {
 
-	// go func() {
-	// 	for {
-	// 		time.Sleep(20000 * time.Millisecond)
-	// 		log.Println("sending config again!")
-	// 		var data = new(bytes.Buffer)
-	// 		binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
-	// 		data.Write([]byte{0x01})
-	// 		data.Write(jsonConfig)
-	// 		_, err := data.WriteTo(LC.Socket)
-	// 		if err != nil {
-	// 			return
-	// 		}
-	// 	}
-	// }()
+// 	jsonConfig, err := json.Marshal(LC.Config)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	log.Println("Sending config;", string(jsonConfig))
-	data := new(bytes.Buffer)
-	binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
-	data.Write([]byte{0x01})
-	data.Write(jsonConfig)
-	// log.Println("config bytes:", data.Bytes())
-	data.WriteTo(LC.Socket)
-}
-func (b *Brain) SendBrainToController(LC *LiveController) {
-	jsonBrain, err := json.Marshal(b)
-	if err != nil {
-		panic(err)
-	}
+// 	// go func() {
+// 	// 	for {
+// 	// 		time.Sleep(20000 * time.Millisecond)
+// 	// 		log.Println("sending config again!")
+// 	// 		var data = new(bytes.Buffer)
+// 	// 		binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
+// 	// 		data.Write([]byte{0x01})
+// 	// 		data.Write(jsonConfig)
+// 	// 		_, err := data.WriteTo(LC.Socket)
+// 	// 		if err != nil {
+// 	// 			return
+// 	// 		}
+// 	// 	}
+// 	// }()
 
-	log.Println("Sending brain;", string(jsonBrain))
-	data := new(bytes.Buffer)
-	binary.Write(data, binary.LittleEndian, uint16(len(jsonBrain)))
-	data.Write([]byte{0x02})
-	data.Write(jsonBrain)
-	data.WriteTo(LC.Socket)
+// 	log.Println("Sending config;", string(jsonConfig))
+// 	data := new(bytes.Buffer)
+// 	binary.Write(data, binary.LittleEndian, uint16(len(jsonConfig)))
+// 	data.Write([]byte{0x01})
+// 	data.Write(jsonConfig)
+// 	// log.Println("config bytes:", data.Bytes())
+// 	data.WriteTo(LC.Socket)
+// }
 
-}
-func (b *Brain) SendNewAddressToControllers(address string) {
-	data := new(bytes.Buffer)
-	binary.Write(data, binary.LittleEndian, uint16(len(address)))
-	data.Write([]byte{0x03})
-	log.Println("Sending a new address to controllers.")
-	data.Write([]byte(address))
-	outData := data.Bytes()
-	for _, v := range b.Controllers {
-		_, err := v.Socket.Write(outData)
-		if err != nil {
-			log.Println("Could not send new address to controller:", v.Config.IP, v.Config.Collector.Port)
-			continue
-		}
-	}
-}
+// func (b *Brain) SendBrainToController(LC *LiveController) {
+// 	jsonBrain, err := json.Marshal(b)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	log.Println("Sending brain;", string(jsonBrain))
+// 	data := new(bytes.Buffer)
+// 	binary.Write(data, binary.LittleEndian, uint16(len(jsonBrain)))
+// 	data.Write([]byte{0x02})
+// 	data.Write(jsonBrain)
+// 	data.WriteTo(LC.Socket)
+
+// }
+// func (b *Brain) SendNewAddressToControllers(address string) {
+// 	data := new(bytes.Buffer)
+// 	binary.Write(data, binary.LittleEndian, uint16(len(address)))
+// 	data.Write([]byte{0x03})
+// 	log.Println("Sending a new address to controllers.")
+// 	data.Write([]byte(address))
+// 	outData := data.Bytes()
+// 	for _, v := range b.Controllers {
+// 		_, err := v.Socket.Write(outData)
+// 		if err != nil {
+// 			log.Println("Could not send new address to controller:", v.Config.IP, v.Config.Collector.Port)
+// 			continue
+// 		}
+// 	}
+// }
 func (c *LiveController) ListenToController() {
 	defer func() {
 		r := recover()
 		if r != nil {
 			log.Println("Panic in controller reader", r, string(debug.Stack()))
 		}
-		GlobalBrain.UnAssignControllerFromIPAndPort(c)
+		// GlobalBrain.UnAssignControllerFromIPAndPort(c)
 		GlobalBrain.RemoveController(c.Socket.RemoteAddr().String())
 	}()
 	buf := make([]byte, 20000)
@@ -305,52 +181,53 @@ func (c *LiveController) ListenToController() {
 		log.Println("FROM CONTROLLER:", buf[0:n])
 	}
 }
-func (b *Brain) UnAssignControllerFromIPAndPort(c *LiveController) {
-	defer func() {
-		r := recover()
-		if r != nil {
-			log.Println("Panic when un assigning controller", r, string(debug.Stack()))
-			b.SafeUnlock()
-		}
-	}()
-	b.Lock()
-	for i, v := range b.Config.Clusters {
-		for ii, iv := range v.Controllers {
-			if iv.IP == c.Config.IP && iv.Collector.Port == c.Config.Collector.Port {
-				log.Println("UnAssign Controller:", iv.IP, iv.Live, iv.Collector.Port)
-				b.Config.Clusters[i].Controllers[ii].Live = false
-				break
-			}
-		}
-	}
-	b.Unlock()
 
-}
-func (b *Brain) AssignControllerToIPAndPort(c *LiveController) error {
-	defer func() {
-		r := recover()
-		if r != nil {
-			log.Println("Panic when un assigning controller", r, string(debug.Stack()))
-			b.SafeUnlock()
-		}
-	}()
-	b.Lock()
-	cIP := strings.Split(c.Socket.RemoteAddr().String(), ":")[0]
-	err := errors.New("could not find a config for IP:" + cIP)
-	for i, v := range b.Config.Clusters {
-		for ii, iv := range v.Controllers {
-			if iv.IP == cIP {
-				log.Println("Assigning Controller:", iv.IP, iv.Live, iv.Collector.Port)
-				err = errors.New("all controlles assigned to that IP address are already live")
-				if !iv.Live {
-					err = nil
-					b.Config.Clusters[i].Controllers[ii].Live = true
-					c.Config = &iv
-					break
-				}
-			}
-		}
-	}
-	b.Unlock()
-	return err
-}
+// func (b *Brain) UnAssignControllerFromIPAndPort(c *LiveController) {
+// 	defer func() {
+// 		r := recover()
+// 		if r != nil {
+// 			log.Println("Panic when un assigning controller", r, string(debug.Stack()))
+// 			b.SafeUnlock()
+// 		}
+// 	}()
+// 	b.Lock()
+// 	for i, v := range b.Config.Clusters {
+// 		for ii, iv := range v.Controllers {
+// 			if iv.IP == c.Config.IP && iv.Collector.Port == c.Config.Collector.Port {
+// 				log.Println("UnAssign Controller:", iv.IP, iv.Live, iv.Collector.Port)
+// 				b.Config.Clusters[i].Controllers[ii].Live = false
+// 				break
+// 			}
+// 		}
+// 	}
+// 	b.Unlock()
+
+// }
+// func (b *Brain) AssignControllerToIPAndPort(c *LiveController) error {
+// 	defer func() {
+// 		r := recover()
+// 		if r != nil {
+// 			log.Println("Panic when un assigning controller", r, string(debug.Stack()))
+// 			b.SafeUnlock()
+// 		}
+// 	}()
+// 	b.Lock()
+// 	cIP := strings.Split(c.Socket.RemoteAddr().String(), ":")[0]
+// 	err := errors.New("could not find a config for IP:" + cIP)
+// 	for i, v := range b.Config.Clusters {
+// 		for ii, iv := range v.Controllers {
+// 			if iv.IP == cIP {
+// 				log.Println("Assigning Controller:", iv.IP, iv.Live, iv.Collector.Port)
+// 				err = errors.New("all controlles assigned to that IP address are already live")
+// 				if !iv.Live {
+// 					err = nil
+// 					b.Config.Clusters[i].Controllers[ii].Live = true
+// 					c.Config = &iv
+// 					break
+// 				}
+// 			}
+// 		}
+// 	}
+// 	b.Unlock()
+// 	return err
+// }

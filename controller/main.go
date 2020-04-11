@@ -3,7 +3,6 @@ package controller
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"log"
 	"math/rand"
@@ -72,6 +71,7 @@ type ControllerConfig struct {
 	IP       string
 	Debug    bool
 	Shutdown bool
+	Tag      string
 	UI       struct {
 		IP   string
 		Port int
@@ -82,7 +82,7 @@ type ControllerConfig struct {
 	}
 }
 
-func (b *Brain) connectToBrain(address string, stop chan os.Signal) (config ControllerConfig) {
+func (b *Brain) connectToBrain(address string, stop chan os.Signal) {
 	for {
 		select {
 		case signal := <-stop:
@@ -115,11 +115,11 @@ func (b *Brain) connectToBrain(address string, stop chan os.Signal) (config Cont
 			log.Println("The brain sent an error:", string(data))
 			continue
 		}
-		err = json.Unmarshal(data, &config)
-		if err != nil {
-			log.Println("Error parsing JSON from the brain:", string(data))
-			continue
-		}
+		// err = json.Unmarshal(data, &config)
+		// if err != nil {
+		// 	log.Println("Error parsing JSON from the brain:", string(data))
+		// 	continue
+		// }
 		b.Socket = socket
 		b.SendChannel = make(chan []byte, 10000)
 
@@ -128,14 +128,14 @@ func (b *Brain) connectToBrain(address string, stop chan os.Signal) (config Cont
 
 	log.Println("/////////////////////////////////////////////////////")
 	log.Println("I managed to reach the brain @", address)
-	log.Println("Controller default IP:", config.IP)
-	log.Println("Collector IP/PORT:", config.Collector)
-	log.Println("UI IP/PORT:", config.UI)
-	log.Println("Debug:", config.Debug)
+	// log.Println("Controller default IP:", config.IP)
+	// log.Println("Collector IP/PORT:", config.Collector)
+	// log.Println("UI IP/PORT:", config.UI)
+	// log.Println("Debug:", config.Debug)
 	log.Println("/////////////////////////////////////////////////////")
 	return
 }
-func Start(address string) {
+func Start(address string, config *ControllerConfig, alerting []alerting.Alerting) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	rand.Seed(time.Now().Unix())
@@ -144,27 +144,8 @@ func Start(address string) {
 		Address: address,
 	}
 	GlobalBrain = &Brain
-	file, err := os.OpenFile("connectTo", os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		log.Println("could not create file (connectTo) in root directory...")
-		os.Exit(1)
-	}
 
-	reader := bufio.NewReader(file)
-	line, _, _ := reader.ReadLine()
-
-	if len(line) > 0 {
-		Brain.Address = string(line)
-		log.Println("Got the brains address from the connectTo file:", Brain.Address)
-	} else {
-		_, err = file.WriteAt([]byte(address), 0)
-		if err != nil {
-			log.Println("could not write connectTo flag to file (connectTo) in root directory")
-			os.Exit(1)
-		}
-	}
-	log.Println(address)
-	config := Brain.connectToBrain(address, stop)
+	Brain.connectToBrain(address, stop)
 
 	UIServer := ui.NewUIServer()
 	UIServer.ClientList = make(map[string]*ui.UI)
@@ -178,7 +159,7 @@ func Start(address string) {
 	UIServer.Port = strconv.Itoa(config.UI.Port)
 
 	controller := Controller{
-		Config:     config,
+		Config:     *config,
 		Collectors: make(map[string]*Collector),
 		UIServer:   UIServer,
 	}
@@ -205,7 +186,6 @@ func Start(address string) {
 			} else if index == 2 {
 				go controller.start(watcherChannel, closeChannel)
 			} else if index == 3 {
-				GlobalController.Config = Brain.connectToBrain(address, stop)
 				go Brain.MaintainLinkToBrain(watcherChannel, closeChannel)
 			}
 
@@ -236,98 +216,9 @@ func (b *Brain) MaintainLinkToBrain(watcherChannel chan int, closeChannel chan b
 			log.Println("Error reading length bytes from brain", err)
 			return
 		}
-
-		data := make([]byte, binary.LittleEndian.Uint16(controlBytes[:2]))
-		_, err = b.Socket.Read(data)
-		if err != nil {
-			log.Println("Error reading data fom brain ...", err)
-		}
-
-		if controlBytes[2] == 1 {
-			// config
-			err = b.DecodeConfig(closeChannel, data)
-			if err == nil {
-				continue
-			}
-		} else if controlBytes[2] == 2 {
-			// brain
-			err = b.DecodeBrain(data)
-			if err == nil {
-				continue
-			}
-		}
-
+		log.Println("CONTROL FROM BRAIN:", controlBytes)
 	}
 }
-func RestartServers(closeChannel chan bool) {
-	rand.Seed(time.Now().UnixNano())
-	n := rand.Intn(5)
-	time.Sleep(time.Duration(n) * time.Second)
-	ui.UIHTTPsrv.Close()
-	GlobalController.Lock()
-	for _, v := range GlobalController.UIServer.ClientList {
-		if v != nil {
-			_ = v.Conn.Close()
-		}
-	}
-	for _, v := range GlobalController.Collectors {
-		if v != nil {
-			_ = v.Conn.Close()
-		}
-	}
-	GlobalController.Unlock()
-	closeChannel <- true
-}
-func (b *Brain) DecodeBrain(data []byte) error {
-	var brain Brain
-	// log.Println(string(data))
-	err := json.Unmarshal(data, &brain)
-	if err != nil {
-		log.Println("could not decode brain", err)
-		return err
-	}
-	b.Lock()
-	if len(brain.Alerting) > 0 {
-		b.Alerting = brain.Alerting
-	}
-	if len(brain.Collecting.Custom) > 0 || len(brain.Collecting.Default) > 0 {
-		b.Collecting = brain.Collecting
-	}
-
-	b.Unlock()
-	log.Println(b.Collecting)
-	log.Println(b.Alerting)
-	return nil
-}
-func (b *Brain) DecodeConfig(closeChannel chan bool, data []byte) error {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println("crashed while restarting..", r, string(debug.Stack()))
-			GlobalController.SafeUnlock()
-		}
-	}()
-
-	var config ControllerConfig
-	err := json.Unmarshal(data, &config)
-	if err != nil {
-		log.Println(err)
-		return err
-	} else if config.IP == "" {
-		return errors.New("Not updating config, IP missing")
-	} else if config.Shutdown {
-		log.Println("Brain told me to exit...")
-		os.Exit(1)
-	} else if config.Restart {
-		RestartServers(closeChannel)
-	}
-
-	GlobalController.Lock()
-	GlobalController.Config = config
-	GlobalController.Unlock()
-	return nil
-
-}
-
 func (c *Controller) CleanupOnExit() {
 	log.Println("Post exit cleanup ..")
 	for _, collector := range c.Collectors {
@@ -435,8 +326,8 @@ func findCollectorNamespaces(collector *Collector) (namespaces []string) {
 }
 func connectCollector(collector *Collector, controller *Controller, message string) {
 	collector.TAG = strings.TrimSuffix(message, "\n")
-	ns := findCollectorNamespaces(collector)
-	collector.Namespaces = namespaces.MakeMapFromNamespaces(ns)
+	// ns := findCollectorNamespaces(collector)
+	// collector.Namespaces = namespaces.MakeMapFromNamespaces(ns)
 
 	defer func() {
 		log.Println("Closing read pipe from", collector.TAG)
@@ -451,17 +342,17 @@ func connectCollector(collector *Collector, controller *Controller, message stri
 		return
 	}
 
-	jsonIndexes, err := json.Marshal(ns)
-	if err != nil {
-		panic(err)
-	}
-	log.Println("SENDING INDEXES:", string(jsonIndexes))
-	_, err = collector.Conn.Write([]byte(string(jsonIndexes) + "\n"))
-	if err != nil {
-		log.Println("could not establish coms with collector", err)
-		controller.RemoveCollector(collector.TAG)
-		return
-	}
+	// jsonIndexes, err := json.Marshal(ns)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// log.Println("SENDING INDEXES:", string(jsonIndexes))
+	// _, err = collector.Conn.Write([]byte(string(jsonIndexes) + "\n"))
+	// if err != nil {
+	// 	log.Println("could not establish coms with collector", err)
+	// 	controller.RemoveCollector(collector.TAG)
+	// 	return
+	// }
 
 	log.Println("Starting general collection from:", collector.TAG)
 	readFromConnectionOriginal(collector, controller)

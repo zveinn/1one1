@@ -1,10 +1,8 @@
 package processor
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"log"
 	"math/rand"
 	"net"
@@ -14,7 +12,6 @@ import (
 
 	stats "github.com/zkynetio/lynx/collector/stats"
 	helpers "github.com/zkynetio/lynx/helpers"
-	"github.com/zkynetio/lynx/namespaces"
 )
 
 type Collector struct {
@@ -219,22 +216,22 @@ func dialController(controller *Controller) (err error) {
 func (c *Collector) handShakeWithController(controller *Controller, tag string) (err error) {
 	_, err = controller.Conn.Write([]byte(tag + "\n"))
 	helpers.PanicX(err)
-	var ns []string
+	// var ns []string
 
-	msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
-	log.Println(string(msg))
-	if err != nil {
-		log.Println("Coult not handshake with controller", msg)
-		controller.Conn.Close()
-	}
-	err = json.Unmarshal([]byte(msg), &ns)
-	if err != nil {
-		log.Println("Coult not handshake with controller", msg)
-		controller.Conn.Close()
-	}
-	log.Println("GOT THESE NAMESPACES FROM THE CONTROLLER:", ns)
-	c.Namespaces = namespaces.MakeMapFromNamespaces(ns)
-	log.Println("NAMESPACE MAP:", c.Namespaces)
+	// msg, err := bufio.NewReader(controller.Conn).ReadString('\n')
+	// log.Println(string(msg))
+	// if err != nil {
+	// 	log.Println("Coult not handshake with controller", msg)
+	// 	controller.Conn.Close()
+	// }
+	// err = json.Unmarshal([]byte(msg), &ns)
+	// if err != nil {
+	// 	log.Println("Coult not handshake with controller", msg)
+	// 	controller.Conn.Close()
+	// }
+	// log.Println("GOT THESE NAMESPACES FROM THE CONTROLLER:", ns)
+	// c.Namespaces = namespaces.MakeMapFromNamespaces(ns)
+	// log.Println("NAMESPACE MAP:", c.Namespaces)
 
 	return
 }
